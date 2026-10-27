@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HoK Draft Simulator – Global Ban & Pick</title>
+<style>
+:root{
+  --bg:#0b1120; --panel:rgba(255,255,255,.04); --ring:rgba(255,255,255,.1);
+  --text:#e2e8f0; --muted:#94a3b8; --accent:#6366f1;
+  --blue:#3b82f6; --red:#ef4444; --gold:#fbbf24;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(circle at 20% 0%,#172038 0%,#0b1120 55%);color:var(--text);min-height:100vh}
+button,select,input,textarea{font-family:inherit}
+.app{max-width:1500px;margin:0 auto;padding:20px}
+.app-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.app-header h1{margin:0;font-size:22px}
+.app-header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.header-actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:0;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn-emerald{background:#10b981;color:#fff}
+.btn-sky{background:#0ea5e9;color:#fff}
+.btn-ghost{background:rgba(255,255,255,.06);color:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.series-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border-radius:12px;padding:8px 14px;box-shadow:inset 0 0 0 1px var(--ring);margin-bottom:12px}
+.series-bar label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.series-bar select{background:rgba(0,0,0,.4);border:0;border-radius:6px;padding:5px 8px;color:#fff;font-size:12px;outline:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)}
+.series-bar .game-indicator{font-size:13px;font-weight:700;color:var(--gold)}
+.series-bar .spacer{flex:1}
+.series-bar .team-score{font-size:13px;font-weight:700}
+.series-bar .team-score.blue{color:#93c5fd}
+.series-bar .team-score.red{color:#fca5a5}
+.draft-layout{display:grid;grid-template-columns:1fr 340px;gap:16px}
+@media(max-width:1100px){.draft-layout{grid-template-columns:1fr}}
+.team-panel{background:var(--panel);border-radius:12px;padding:14px;box-shadow:inset 0 0 0 1px var(--ring)}
+.team-panel.blue{border-top:3px solid var(--blue)}
+.team-panel.red{border-top:3px solid var(--red)}
+.team-panel h2{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px}
+.team-panel h2 .badge{font-size:10px;padding:2px 8px;border-radius:999px;font-weight:700}
+.team-panel.blue h2 .badge{background:rgba(59,130,246,.2);color:#93c5fd}
+.team-panel.red h2 .badge{background:rgba(239,68,68,.2);color:#fca5a5}
+.draft-section{margin-bottom:12px}
+.draft-section h3{margin:0 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.draft-slots{display:flex;gap:6px;flex-wrap:wrap}
+.draft-slot{width:52px;height:52px;border-radius:8px;background:rgba(0,0,0,.3);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--muted);position:relative;overflow:hidden;transition:box-shadow .15s}
+.draft-slot.ban-slot{background:rgba(239,68,68,.08);box-shadow:inset 0 0 0 1px rgba(239,68,68,.2)}
+.draft-slot.pick-slot{background:rgba(59,130,246,.08);box-shadow:inset 0 0 0 1px rgba(59,130,246,.2)}
+.draft-slot img{width:100%;height:100%;object-fit:cover;border-radius:7px}
+.draft-slot .slot-name{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.75);font-size:8px;padding:1px 2px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+.draft-slot.active-slot{box-shadow:0 0 0 2px var(--gold),inset 0 0 0 1px rgba(255,255,255,.2)}
+.draft-slot.unknown-hero{color:#94a3b8;font-size:8px;padding:2px}
+.hero-pool-panel{background:var(--panel);border-radius:12px;padding:14px;box-shadow:inset 0 0 0 1px var(--ring);margin-top:16px}
+.hero-pool-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.hero-pool-header h3{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.hero-pool-header input{background:rgba(0,0,0,.4);border:0;border-radius:6px;padding:6px 10px;color:#fff;font-size:12px;outline:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);width:180px}
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:6px;max-height:200px;overflow-y:auto;padding-right:2px}
+.hero-grid .no-data-msg{grid-column:1/-1;text-align:center;padding:24px 16px;color:#94a3b8;font-size:13px;line-height:1.7}
+.hero-grid .no-data-msg code{color:#a5b4fc;background:rgba(165,180,252,.12);padding:1px 6px;border-radius:4px}
+.hero-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(0,0,0,.28);border-radius:8px;padding:5px 2px;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);transition:box-shadow .15s,opacity .15s}
+.hero-card:hover:not(.disabled){box-shadow:inset 0 0 0 1px rgba(99,102,241,.6)}
+.hero-card.disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+.hero-card.globally-banned{opacity:.3;filter:grayscale(1)}
+.hero-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;overflow:hidden;background:#475569;box-shadow:0 0 0 2px rgba(255,255,255,.3)}
+.hero-avatar img{width:100%;height:100%;object-fit:cover}
+.hero-name{font-size:9px;color:#cbd5e1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+.hero-card .global-tag{position:absolute;top:1px;right:1px;background:rgba(239,68,68,.9);color:#fff;font-size:7px;padding:1px 3px;border-radius:3px;font-weight:700;letter-spacing:.04em}
+.phase-indicator{background:rgba(0,0,0,.45);border-radius:10px;padding:10px 14px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.phase-indicator .phase-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.phase-indicator .phase-value{font-size:14px;font-weight:800;color:var(--gold)}
+.phase-indicator .phase-detail{font-size:12px;color:#cbd5e1}
+.phase-indicator .turn-badge{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.turn-badge.blue{background:rgba(59,130,246,.25);color:#93c5fd}
+.turn-badge.red{background:rgba(239,68,68,.25);color:#fca5a5}
+.win-prediction{display:flex;flex-direction:column;gap:6px}
+.wp-bar{position:relative;height:14px;border-radius:7px;background:#1e293b;overflow:hidden;display:flex;box-shadow:inset 0 1px 3px rgba(0,0,0,0.5)}
+.wp-blue{background:var(--blue);height:100%;transition:width 0.3s}
+.wp-red{background:var(--red);height:100%;transition:width 0.3s}
+.wp-ci-band{position:absolute;top:0;bottom:0;pointer-events:none;background:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 3px,transparent 3px 6px);border-left:1px dashed rgba(255,255,255,.65);border-right:1px dashed rgba(255,255,255,.65)}
+.wp-labels{display:flex;justify-content:space-between;font-size:13px;font-weight:800;margin-top:2px}
+.wp-label-blue{color:#93c5fd}
+.wp-label-red{color:#fca5a5}
+.wp-ci-text{display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:1px}
+.wp-ci-text span:first-child{color:#93c5fd}
+.wp-ci-text span:last-child{color:#fca5a5}
+.wp-details{font-size:10px;color:var(--muted);display:flex;justify-content:space-between;margin-top:4px;gap:6px}
+.wp-details > span{flex:1}
+.wp-note{text-align:center;margin-top:6px;font-size:10px;color:#64748b;line-height:1.5}
+.sidebar-card{background:var(--panel);border-radius:12px;padding:12px;box-shadow:inset 0 0 0 1px var(--ring);margin-bottom:12px}
+.sidebar-card h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.sidebar-card .hint{font-size:10px;color:#64748b;line-height:1.55;margin:8px 0 0}
+.sidebar-card .hint b{color:#e2e8f0}
+.sidebar-card .hint code{color:#a5b4fc}
+.toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,20px);background:rgba(30,41,59,.95);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.1);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:1000}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.modal{position:fixed;inset:0;background:rgba(2,6,23,.85);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:900;overflow-y:auto}
+.modal[hidden]{display:none}
+.modal-card{background:#111a2e;border-radius:14px;padding:22px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6),inset 0 0 0 1px var(--ring)}
+.modal-card header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.modal-card h2{margin:0;font-size:18px}
+.modal-card h2 code{color:#a5b4fc;background:rgba(165,180,252,.12);padding:1px 6px;border-radius:4px;font-size:16px}
+.modal-close{background:none;border:0;color:#94a3b8;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px}
+.modal-close:hover{background:rgba(255,255,255,.08);color:#fff}
+.helper-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0}
+@media(max-width:640px){.helper-grid{grid-template-columns:1fr}}
+.helper-pane h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.file-list{margin:8px 0 0;padding-left:18px;font-size:11px;color:#cbd5e1;max-height:120px;overflow-y:auto}
+.helper-output{width:100%;height:200px;background:#0b1120;color:#a5b4fc;border:0;border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;resize:vertical;outline:none;box-shadow:inset 0 0 0 1px var(--ring)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+
+/* Similar Matches */
+.similar-panel{background:var(--panel);border-radius:12px;padding:14px;box-shadow:inset 0 0 0 1px var(--ring);margin-top:16px}
+.similar-panel-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.similar-panel-header h3{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.similar-panel-header .actions{display:flex;gap:8px;flex-wrap:wrap}
+.similar-status{font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:10px}
+.similar-status code{color:#a5b4fc;background:rgba(165,180,252,.12);padding:1px 5px;border-radius:3px}
+.similar-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px}
+.similar-empty{grid-column:1/-1;text-align:center;padding:20px;color:#64748b;font-size:12px;line-height:1.6}
+
+.similar-match{
+  display:block;padding:12px 14px;background:rgba(0,0,0,.3);border-radius:8px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);
+  text-decoration:none;color:inherit;font-size:12px;
+  transition:box-shadow .15s,background .15s;
+}
+.similar-match.clickable{cursor:pointer}
+.similar-match.clickable:hover{background:rgba(99,102,241,.10);box-shadow:inset 0 0 0 1px rgba(99,102,241,.5)}
+
+.similar-match-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;gap:8px}
+.similar-match-title{color:#cbd5e1;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.similar-match-score{color:#fbbf24;font-weight:800;font-size:13px;white-space:nowrap}
+
+/* date line — was #64748b @ 9px, now #94a3b8 @ 10.5px */
+.similar-match-meta{font-size:10.5px;color:#94a3b8;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.similar-match-team{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.similar-match-team-name{width:100px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.similar-match-team-name.blue{color:#93c5fd;font-weight:600}
+.similar-match-team-name.red{color:#fca5a5;font-weight:600}
+
+.similar-match-picks{display:flex;gap:3px;flex:1}
+.similar-match-pick{
+  width:26px;height:26px;border-radius:4px;background:#1e293b;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:#94a3b8;flex-shrink:0;font-weight:700;
+}
+.similar-match-pick img{width:100%;height:100%;object-fit:cover;display:block}
+.similar-match-pick.matched{box-shadow:0 0 0 2px #22c55e}
+.similar-match-pick.unmatched{opacity:.35}
+
+.similar-match-result{font-size:10px;font-weight:800;padding:2px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.similar-match-result.win{background:rgba(34,197,94,.2);color:#22c55e}
+.similar-match-result.loss{background:rgba(239,68,68,.2);color:#ef4444}
+
+.similar-match-footer{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px}
+.similar-match-simscore{font-size:10px;color:#94a3b8;font-weight:600}
+.similar-match-simscore b{color:#a5b4fc}
+.similar-match-link{font-size:10px;color:#6366f1;font-weight:700;text-align:right}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div>
+      <h1>🎮 HoK Draft Simulator – Global Ban & Pick</h1>
+      <p>Tournament-style drafting for Honor of Kings. Global bans, phase-by-phase pick order, and uncertainty-aware win prediction.</p>
+    </div>
+    <div class="header-actions">
+      <button id="resetSeriesBtn" class="btn btn-ghost">↺ Reset Series</button>
+      <button id="saveBtn" class="btn btn-emerald">⬇ Save Draft</button>
+      <button id="loadBtn" class="btn btn-sky">⬆ Load Draft</button>
+      <input id="loadInput" type="file" accept="application/json,.json" hidden />
+      <button id="helperBtn" class="btn btn-ghost">⚙️ Data Helper</button>
+    </div>
+  </header>
+
+  <div class="series-bar">
+    <label for="seriesFormat">Series</label>
+    <select id="seriesFormat">
+      <option value="bo3">Bo3</option>
+      <option value="bo5" selected>Bo5</option>
+      <option value="bo7">Bo7</option>
+    </select>
+    <span class="game-indicator" id="gameIndicator">Game 1</span>
+    <button id="nextGameBtn" class="btn btn-ghost" style="padding:4px 10px;font-size:12px">➕ Add Next Game</button>
+    <div class="spacer"></div>
+    <span class="team-score blue" id="seriesBlueScore">Blue 0</span>
+    <span class="team-score red" id="seriesRedScore">Red 0</span>
+  </div>
+
+  <div class="phase-indicator" id="phaseIndicator">
+    <span class="phase-label">Current Phase</span>
+    <span class="phase-value" id="phaseValue">—</span>
+    <span class="phase-detail" id="phaseDetail"></span>
+    <span id="turnBadge" class="turn-badge blue">Blue Turn</span>
+  </div>
+
+  <div class="draft-layout">
+    <div>
+      <div class="draft-layout" style="grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="team-panel blue">
+          <h2>🔵 Blue Team <span class="badge">Your Team</span></h2>
+          <div class="draft-section">
+            <h3>Bans</h3>
+            <div class="draft-slots" id="blueBans"></div>
+          </div>
+          <div class="draft-section">
+            <h3>Picks</h3>
+            <div class="draft-slots" id="bluePicks"></div>
+          </div>
+        </div>
+        <div class="team-panel red">
+          <h2>🔴 Red Team <span class="badge">Enemy</span></h2>
+          <div class="draft-section">
+            <h3>Bans</h3>
+            <div class="draft-slots" id="redBans"></div>
+          </div>
+          <div class="draft-section">
+            <h3>Picks</h3>
+            <div class="draft-slots" id="redPicks"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-pool-panel">
+        <div class="hero-pool-header">
+          <h3>Available Heroes</h3>
+          <input id="heroSearch" placeholder="Search hero…" />
+        </div>
+        <div class="hero-grid" id="heroGrid"></div>
+      </div>
+
+      <div class="similar-panel">
+        <div class="similar-panel-header">
+          <h3>🔍 Similar Matches</h3>
+          <div class="actions">
+            <button id="loadMatchesBtn" class="btn btn-ghost" style="font-size:12px;padding:6px 10px">📁 Load Match History CSV</button>
+            <button id="findSimilarBtn" class="btn btn-sky" style="font-size:12px;padding:6px 10px" disabled>🔍 Find Similar Matches</button>
+            <input id="matchesFiles" type="file" accept=".csv,text/csv" hidden />
+          </div>
+        </div>
+        <div id="similarStatus" class="similar-status">
+          Not loaded. Place <code>hok_matches_base.csv</code> next to this file, or click <b>Load Match History CSV</b>.
+        </div>
+        <div id="similarResults" class="similar-results"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sidebar-card">
+        <h3>Win Prediction</h3>
+        <div id="winPrediction" class="win-prediction">
+          <div class="wp-empty" style="color:#64748b;font-size:11px;text-align:center;padding:4px 0">Complete picks for both teams to see prediction.</div>
+        </div>
+        <p class="hint" style="margin-top:8px">
+          <b>How it's computed:</b> every hero pair contributes one observation. Pairs with real data use their observed
+          winrate; pairs with <b>no data</b> are imputed at <b>50%</b> with a uniform prior (variance 1/12) — so sparse data
+          pulls the prediction toward 50/50. The <b>95% CI</b> propagates each pair's sampling uncertainty through the win
+          ratio. The <b>(k/N)</b> badge shows how many pairs had real data out of N possible.
+        </p>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Matchup Data</h3>
+        <div id="matchupStatus" class="hint" style="margin:0">Loading…</div>
+        <button id="matchupLoadBtn" class="btn btn-ghost" style="width:100%;margin-top:8px;font-size:12px;padding:6px 10px">Load CSV Files</button>
+        <input id="matchupFiles" type="file" accept=".csv,text/csv" multiple hidden />
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Global Ban Rules</h3>
+        <p class="hint">
+          In Global Ban &amp; Pick, a hero picked by a team in any game of the series <b>cannot be picked again by that same team</b> in later games.
+          <br><br>
+          Bans in the current game still apply normally. Heroes from previous games are shown with a red <b>GLOBAL</b> tag if they are unavailable to the active team.
+        </p>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Draft Order</h3>
+        <p class="hint">
+          <b>Phase 1:</b> 2 bans per team (Blue, Red, Blue, Red)<br>
+          <b>Phase 1 picks:</b> 3 picks per team (Blue, Red, Blue, Red, Blue, Red)<br>
+          <b>Phase 2:</b> 2 bans per team (Red, Blue, Red, Blue)<br>
+          <b>Phase 2 picks:</b> 2 picks per team (Red, Blue, Red, Blue)
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="helperModal" class="modal" hidden>
+  <div class="modal-card">
+    <header>
+      <h2>⚙️ Generate <code>data.js</code></h2>
+      <button type="button" class="modal-close" id="helperClose">✕</button>
+    </header>
+    <p class="hint">
+      Select hero images from your <code>HEROES/</code> folder (and optionally map images from <code>MAPS/</code>).
+      The generator produces the same <code>data.js</code> file the tactical board uses, so you can
+      <b>share a single <code>data.js</code> across both tools</b>.
+    </p>
+    <div class="helper-grid">
+      <div class="helper-pane">
+        <h3>Hero images</h3>
+        <input type="file" id="helperHeroFiles" accept="image/*" multiple />
+        <ul id="helperHeroList" class="file-list"></ul>
+      </div>
+      <div class="helper-pane">
+        <h3>Map images (optional)</h3>
+        <input type="file" id="helperMapFiles" accept="image/*" multiple />
+        <ul id="helperMapList" class="file-list"></ul>
+      </div>
+    </div>
+    <textarea id="helperOutput" class="helper-output" readonly spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <button id="helperCopy" class="btn btn-ghost">Copy</button>
+      <button id="helperDownload" class="btn btn-emerald">⬇ Download data.js</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="data.js" onerror="console.warn('[Draft] data.js not found.');"></script>
+<script>
+/* ============================================================
+   Boot data
+   ============================================================ */
+const HAS_HEROES = Array.isArray(window.HEROES) && window.HEROES.length > 0;
+const DATA = {
+  heroes: HAS_HEROES ? window.HEROES.slice() : [],
+  maps:   Array.isArray(window.MAPS) ? window.MAPS.slice() : [],
+};
+
+/* ============================================================
+   Constants
+   ============================================================ */
+const STORAGE_KEY = 'hok-draft-simulator-v1';
+const PHASES = [
+  { team:'blue', action:'ban',  label:'Phase 1 Ban' },
+  { team:'red',  action:'ban',  label:'Phase 1 Ban' },
+  { team:'blue', action:'ban',  label:'Phase 1 Ban' },
+  { team:'red',  action:'ban',  label:'Phase 1 Ban' },
+  { team:'blue', action:'pick', label:'Phase 1 Pick' },
+  { team:'red',  action:'pick', label:'Phase 1 Pick' },
+  { team:'blue', action:'pick', label:'Phase 1 Pick' },
+  { team:'red',  action:'pick', label:'Phase 1 Pick' },
+  { team:'blue', action:'pick', label:'Phase 1 Pick' },
+  { team:'red',  action:'pick', label:'Phase 1 Pick' },
+  { team:'red',  action:'ban',  label:'Phase 2 Ban' },
+  { team:'blue', action:'ban',  label:'Phase 2 Ban' },
+  { team:'red',  action:'ban',  label:'Phase 2 Ban' },
+  { team:'blue', action:'ban',  label:'Phase 2 Ban' },
+  { team:'red',  action:'pick', label:'Phase 2 Pick' },
+  { team:'blue', action:'pick', label:'Phase 2 Pick' },
+  { team:'red',  action:'pick', label:'Phase 2 Pick' },
+  { team:'blue', action:'pick', label:'Phase 2 Pick' },
+];
+
+/* ============================================================
+   Utils
+   ============================================================ */
+const uid = () => Math.random().toString(36).slice(2, 10);
+const normKey = s => String(s || '')
+  .toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
+function nameKeys(name) {
+  const raw = String(name || '');
+  const keys = [];
+  const push = s => { const k = normKey(s); if (k && !keys.includes(k)) keys.push(k); };
+  push(raw);
+  push(raw.replace(/\([^)]*\)/g, ' '));
+  const parens = raw.match(/\(([^)]*)\)/g) || [];
+  parens.forEach(p => push(p.replace(/[()]/g, ' ')));
+  return keys;
+}
+
+/* ============================================================
+   Matchup data (counters / synergies)
+   ============================================================ */
+const matchup = { counters: new Map(), synergies: new Map(), names: new Set() };
+const heroKeyCache = new Map();
+
+function parseCSV(text) {
+  const rows = [];
+  const lines = String(text).split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cells = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; }
+          else inQ = false;
+        } else cur += ch;
+      } else {
+        if (ch === '"') inQ = true;
+        else if (ch === ',') { cells.push(cur); cur = ''; }
+        else cur += ch;
+      }
+    }
+    cells.push(cur);
+    rows.push(cells.map(c => c.trim()));
+  }
+  return rows;
+}
+
+function ingestCsv(text, type) {
+  const rows = parseCSV(text);
+  if (!rows.length) return 0;
+  const header = rows[0].map(h => normKey(h).replace(/ /g, '_'));
+  const idx = name => header.indexOf(name);
+  let iA = type === 'counter' ? idx('hero') : idx('hero_1');
+  let iB = type === 'counter' ? idx('opponent') : idx('hero_2');
+  if (iA < 0) iA = 0;
+  if (iB < 0) iB = 1;
+  let iM = idx('matches'); if (iM < 0) iM = 2;
+  let iW = idx('wins');    if (iW < 0) iW = 3;
+  let iR = idx('win_rate');if (iR < 0) iR = 4;
+  const map = type === 'counter' ? matchup.counters : matchup.synergies;
+  let count = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 2) continue;
+    const a = r[iA], b = r[iB];
+    if (!a || !b) continue;
+    const ka = normKey(a), kb = normKey(b);
+    if (!ka || !kb) continue;
+    const matches = parseInt(r[iM], 10) || 0;
+    const wins = parseInt(r[iW], 10) || 0;
+    let rate = parseFloat(r[iR]);
+    if (!isFinite(rate)) rate = matches ? wins / matches : 0;
+    map.set(ka + '|' + kb, { matches, wins, rate });
+    matchup.names.add(ka);
+    matchup.names.add(kb);
+    count++;
+  }
+  return count;
+}
+
+function detectCsvType(text) {
+  const first = (String(text).split(/\r?\n/, 1)[0] || '').toLowerCase();
+  if (first.includes('hero_1') || first.includes('hero_2')) return 'synergy';
+  if (first.includes('opponent')) return 'counter';
+  return null;
+}
+
+function heroLookupKey(hero) {
+  if (!hero) return '';
+  if (heroKeyCache.has(hero.id)) return heroKeyCache.get(hero.id);
+  const keys = nameKeys(hero.name);
+  let found = null;
+  for (const k of keys) { if (matchup.names.has(k)) { found = k; break; } }
+  if (!found) found = keys[0] || '';
+  heroKeyCache.set(hero.id, found);
+  return found;
+}
+
+function findPair(map, ka, kb) {
+  if (!ka || !kb) return null;
+  const f = map.get(ka + '|' + kb);
+  if (f) return { ...f, reversed: false };
+  const r = map.get(kb + '|' + ka);
+  if (r) return { ...r, reversed: true };
+  return null;
+}
+
+/* ============================================================
+   Draft state
+   ============================================================ */
+const state = {
+  series: { format: 'bo5', currentGame: 1, games: [] },
+  heroSearch: '',
+};
+
+function createEmptyGame() {
+  return { id: uid(), blueBans: [], redBans: [], bluePicks: [], redPicks: [], stepIndex: 0 };
+}
+function ensureGames() {
+  if (!state.series.games.length) state.series.games.push(createEmptyGame());
+}
+function currentGame() {
+  ensureGames();
+  return state.series.games[state.series.currentGame - 1];
+}
+function currentStep() {
+  const g = currentGame();
+  if (g.stepIndex >= PHASES.length) return null;
+  return PHASES[g.stepIndex];
+}
+
+/* ============================================================
+   Global ban helpers
+   ============================================================ */
+function getGlobalBannedHeroes(team) {
+  const banned = new Set();
+  const currentIdx = state.series.currentGame - 1;
+  for (let i = 0; i < currentIdx; i++) {
+    const g = state.series.games[i];
+    const picks = team === 'blue' ? g.bluePicks : g.redPicks;
+    picks.forEach(id => banned.add(id));
+  }
+  return banned;
+}
+function isHeroGloballyBanned(heroId, team) {
+  return getGlobalBannedHeroes(team).has(heroId);
+}
+function isHeroUsedInCurrentGame(heroId) {
+  const g = currentGame();
+  return g.blueBans.includes(heroId) || g.redBans.includes(heroId) ||
+         g.bluePicks.includes(heroId) || g.redPicks.includes(heroId);
+}
+function isHeroAvailable(heroId, team) {
+  return !isHeroGloballyBanned(heroId, team) && !isHeroUsedInCurrentGame(heroId);
+}
+
+/* ============================================================
+   Draft actions
+   ============================================================ */
+function selectHero(heroId) {
+  if (!HAS_HEROES) return;
+  const step = currentStep();
+  if (!step) { toast('Draft is complete for this game.'); return; }
+  const g = currentGame();
+  const team = step.team;
+  const action = step.action;
+  if (!isHeroAvailable(heroId, team)) {
+    toast('This hero is not available (global ban or already used).');
+    return;
+  }
+  const targetArray = team === 'blue'
+    ? (action === 'ban' ? g.blueBans : g.bluePicks)
+    : (action === 'ban' ? g.redBans : g.redPicks);
+  targetArray.push(heroId);
+  g.stepIndex++;
+  renderAll();
+  scheduleSave();
+  if (g.stepIndex >= PHASES.length) toast('Draft complete for this game.');
+}
+
+function resetSeries() {
+  if (!confirm('Reset the entire series? All games and picks will be lost.')) return;
+  state.series.games = [createEmptyGame()];
+  state.series.currentGame = 1;
+  renderAll();
+  scheduleSave();
+}
+
+function addNextGame() {
+  const g = currentGame();
+  if (g.stepIndex < PHASES.length && !confirm('The current game is not finished. Add next game anyway?')) return;
+  const maxGames = state.series.format === 'bo3' ? 3 : state.series.format === 'bo5' ? 5 : 7;
+  if (state.series.games.length >= maxGames) { toast('Series is already at maximum games.'); return; }
+  state.series.games.push(createEmptyGame());
+  state.series.currentGame = state.series.games.length;
+  renderAll();
+  scheduleSave();
+}
+
+/* ============================================================
+   Persistence
+   ============================================================ */
+function scheduleSave() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.series)); }
+  catch (e) { console.warn('[Draft] could not persist', e); }
+}
+function loadStored() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data && Array.isArray(data.games)) state.series = data;
+  } catch (e) { /* ignore */ }
+}
+
+/* ============================================================
+   DOM refs
+   ============================================================ */
+const els = {
+  seriesFormat: document.getElementById('seriesFormat'),
+  gameIndicator: document.getElementById('gameIndicator'),
+  nextGameBtn: document.getElementById('nextGameBtn'),
+  resetSeriesBtn: document.getElementById('resetSeriesBtn'),
+  seriesBlueScore: document.getElementById('seriesBlueScore'),
+  seriesRedScore: document.getElementById('seriesRedScore'),
+  phaseValue: document.getElementById('phaseValue'),
+  phaseDetail: document.getElementById('phaseDetail'),
+  turnBadge: document.getElementById('turnBadge'),
+  blueBans: document.getElementById('blueBans'),
+  bluePicks: document.getElementById('bluePicks'),
+  redBans: document.getElementById('redBans'),
+  redPicks: document.getElementById('redPicks'),
+  heroGrid: document.getElementById('heroGrid'),
+  heroSearch: document.getElementById('heroSearch'),
+  winPrediction: document.getElementById('winPrediction'),
+  matchupStatus: document.getElementById('matchupStatus'),
+  matchupLoadBtn: document.getElementById('matchupLoadBtn'),
+  matchupFiles: document.getElementById('matchupFiles'),
+  helperModal: document.getElementById('helperModal'),
+  helperHeroFiles: document.getElementById('helperHeroFiles'),
+  helperMapFiles: document.getElementById('helperMapFiles'),
+  helperHeroList: document.getElementById('helperHeroList'),
+  helperMapList: document.getElementById('helperMapList'),
+  helperOutput: document.getElementById('helperOutput'),
+  toast: document.getElementById('toast'),
+  similarPanelStatus: document.getElementById('similarStatus'),
+  similarResults: document.getElementById('similarResults'),
+  loadMatchesBtn: document.getElementById('loadMatchesBtn'),
+  findSimilarBtn: document.getElementById('findSimilarBtn'),
+  matchesFiles: document.getElementById('matchesFiles'),
+};
+
+function toast(msg) {
+  const el = els.toast;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+function renderAll() {
+  renderSeriesBar();
+  renderPhaseIndicator();
+  renderDraftSlots();
+  renderHeroGrid();
+  updateWinPrediction();
+  updateMatchupStatus();
+  updateSimilarButton();
+}
+
+function renderSeriesBar() {
+  els.seriesFormat.value = state.series.format;
+  els.gameIndicator.textContent = `Game ${state.series.currentGame} / ${state.series.games.length}`;
+  els.seriesBlueScore.textContent = `Blue ${state.series.games.filter(g => g.bluePicks.length >= 5).length}`;
+  els.seriesRedScore.textContent = `Red ${state.series.games.filter(g => g.redPicks.length >= 5).length}`;
+}
+
+function renderPhaseIndicator() {
+  const step = currentStep();
+  if (!step) {
+    els.phaseValue.textContent = 'Draft Complete';
+    els.phaseDetail.textContent = 'All bans and picks are done for this game.';
+    els.turnBadge.textContent = '—';
+    els.turnBadge.className = 'turn-badge';
+    return;
+  }
+  els.phaseValue.textContent = step.label;
+  els.phaseDetail.textContent = `${step.team.toUpperCase()} ${step.action.toUpperCase()}`;
+  els.turnBadge.textContent = step.team === 'blue' ? 'Blue Turn' : 'Red Turn';
+  els.turnBadge.className = 'turn-badge ' + step.team;
+}
+
+function renderDraftSlots() {
+  const g = currentGame();
+  const step = currentStep();
+  function buildSlots(container, ids, team, action) {
+    container.innerHTML = '';
+    const maxSlots = action === 'ban' ? 4 : 5;
+    for (let i = 0; i < maxSlots; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'draft-slot ' + (action === 'ban' ? 'ban-slot' : 'pick-slot');
+      const heroId = ids[i];
+      if (heroId) {
+        const hero = DATA.heroes.find(h => h.id === heroId);
+        if (hero) {
+          if (hero.img) {
+            const img = document.createElement('img');
+            img.src = hero.img;
+            img.alt = hero.name;
+            img.onerror = () => { img.remove(); slot.textContent = hero.name.slice(0, 2); };
+            slot.appendChild(img);
+          } else {
+            slot.textContent = hero.name.slice(0, 2);
+          }
+          const nameSpan = document.createElement('div');
+          nameSpan.className = 'slot-name';
+          nameSpan.textContent = hero.name;
+          slot.appendChild(nameSpan);
+        } else {
+          slot.classList.add('unknown-hero');
+          slot.textContent = heroId;
+        }
+      } else {
+        slot.textContent = '—';
+      }
+      if (step && step.team === team && step.action === action && ids.length === i) {
+        slot.classList.add('active-slot');
+      }
+      container.appendChild(slot);
+    }
+  }
+  buildSlots(els.blueBans, g.blueBans, 'blue', 'ban');
+  buildSlots(els.bluePicks, g.bluePicks, 'blue', 'pick');
+  buildSlots(els.redBans, g.redBans, 'red', 'ban');
+  buildSlots(els.redPicks, g.redPicks, 'red', 'pick');
+}
+
+function renderHeroGrid() {
+  if (!HAS_HEROES) {
+    els.heroGrid.innerHTML = `
+      <div class="no-data-msg">
+        <div style="font-size:24px;margin-bottom:6px">📄</div>
+        <b style="color:#e2e8f0">No hero data loaded.</b><br>
+        Place <code>data.js</code> next to this file,<br>
+        or use <b>⚙️ Data Helper</b> to generate one.
+      </div>`;
+    return;
+  }
+  const step = currentStep();
+  const activeTeam = step ? step.team : null;
+  const q = state.heroSearch.trim().toLowerCase();
+  const globalBanned = activeTeam ? getGlobalBannedHeroes(activeTeam) : new Set();
+  const filtered = DATA.heroes.filter(h => {
+    if (q && !(h.name || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  els.heroGrid.innerHTML = '';
+  for (const h of filtered) {
+    const card = document.createElement('div');
+    const isGloballyBanned = globalBanned.has(h.id);
+    const isUsed = isHeroUsedInCurrentGame(h.id);
+    const isAvailable = step && !isGloballyBanned && !isUsed;
+    card.className = 'hero-card' + (isGloballyBanned ? ' globally-banned' : '') + (isUsed ? ' disabled' : '');
+    card.title = h.name + (isGloballyBanned ? ' (Global Ban – already picked by this team)' : isUsed ? ' (Already used in this game)' : '');
+    if (isAvailable) card.addEventListener('click', () => selectHero(h.id));
+    const av = document.createElement('div');
+    av.className = 'hero-avatar';
+    if (h.img) {
+      const im = document.createElement('img');
+      im.src = h.img; im.alt = ''; im.draggable = false;
+      im.onerror = () => { av.textContent = (h.name || '?').slice(0, 2); im.remove(); };
+      av.appendChild(im);
+    } else {
+      av.textContent = (h.name || '?').slice(0, 2);
+    }
+    card.appendChild(av);
+    const nm = document.createElement('span');
+    nm.className = 'hero-name';
+    nm.textContent = h.name;
+    card.appendChild(nm);
+    if (isGloballyBanned) {
+      const tag = document.createElement('span');
+      tag.className = 'global-tag';
+      tag.textContent = 'GLOBAL';
+      card.appendChild(tag);
+    }
+    els.heroGrid.appendChild(card);
+  }
+}
+
+/* ============================================================
+   Win prediction
+   ------------------------------------------------------------
+   Every hero pair contributes one observation. Pairs with real
+   data contribute their observed winrate; missing pairs are
+   imputed at 0.5 with uniform prior variance 1/12.
+   Score team = mean(synergy) + mean(counter). Win prob
+   = Sblue / (Sblue + Sred). CI from Monte-Carlo propagated
+   from per-pair Jeffreys posterior variances.
+   ============================================================ */
+function pairPosteriorVariance(rate, matches) {
+  if (matches <= 0) return null;
+  const wins = rate * matches;
+  const a = wins + 0.5;
+  const b = matches - wins + 0.5;
+  const t = a + b;
+  return (a * b) / (t * t * (t + 1));
+}
+
+function computeCategoryStat(pairs) {
+  const total = pairs.length;
+  if (total === 0) return { mean: 0.5, variance: 1/12, k: 0, total: 0, totalMatches: 0 };
+  let sum = 0, varSum = 0, k = 0, totalMatches = 0;
+  for (const p of pairs) {
+    if (p.matches > 0 && p.rate != null) {
+      sum += p.rate;
+      varSum += pairPosteriorVariance(p.rate, p.matches);
+      k++;
+      totalMatches += p.matches;
+    } else {
+      sum += 0.5;         // impute 50%
+      varSum += 1 / 12;   // uniform prior variance
+    }
+  }
+  return { mean: sum / total, variance: varSum / (total * total), k, total, totalMatches };
+}
+
+function getTeamStats(teamPicks, enemyPicks) {
+  const syPairs = [];
+  for (let i = 0; i < teamPicks.length; i++) {
+    for (let j = i + 1; j < teamPicks.length; j++) {
+      const h1 = DATA.heroes.find(h => h.id === teamPicks[i]);
+      const h2 = DATA.heroes.find(h => h.id === teamPicks[j]);
+      if (!h1 || !h2) continue;
+      const found = findPair(matchup.synergies, heroLookupKey(h1), heroLookupKey(h2));
+      if (found && found.matches > 0) syPairs.push({ rate: found.rate, matches: found.matches });
+      else syPairs.push({ rate: null, matches: 0 });
+    }
+  }
+  const coPairs = [];
+  for (const id1 of teamPicks) {
+    for (const id2 of enemyPicks) {
+      const h1 = DATA.heroes.find(h => h.id === id1);
+      const h2 = DATA.heroes.find(h => h.id === id2);
+      if (!h1 || !h2) continue;
+      const found = findPair(matchup.counters, heroLookupKey(h1), heroLookupKey(h2));
+      if (found && found.matches > 0) {
+        const rate = found.reversed ? 1 - found.rate : found.rate;
+        coPairs.push({ rate, matches: found.matches });
+      } else {
+        coPairs.push({ rate: null, matches: 0 });
+      }
+    }
+  }
+  return { sy: computeCategoryStat(syPairs), co: computeCategoryStat(coPairs) };
+}
+
+let _randnSpare = null;
+function randn() {
+  if (_randnSpare !== null) { const v = _randnSpare; _randnSpare = null; return v; }
+  let u, v, s;
+  do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u * u + v * v; }
+  while (s >= 1 || s === 0);
+  const mul = Math.sqrt(-2 * Math.log(s) / s);
+  _randnSpare = v * mul;
+  return u * mul;
+}
+function monteCarloBlueWin(nSamples, muS, sigmaS, muR, sigmaR) {
+  const samples = new Array(nSamples);
+  for (let i = 0; i < nSamples; i++) {
+    const s = Math.max(1e-4, muS + sigmaS * randn());
+    const r = Math.max(1e-4, muR + sigmaR * randn());
+    samples[i] = s / (s + r);
+  }
+  samples.sort((a, b) => a - b);
+  const lo = samples[Math.floor(0.025 * nSamples)];
+  const hi = samples[Math.min(nSamples - 1, Math.floor(0.975 * nSamples))];
+  return { ciLow: lo * 100, ciHigh: hi * 100 };
+}
+function coverageBadge(k, total) {
+  if (total === 0) return '';
+  if (k === total) return `<span style="color:#22c55e">${k}/${total}</span>`;
+  if (k === 0)     return `<span style="color:#ef4444">0/${total}</span>`;
+  if (k < total/2) return `<span style="color:#f59e0b">${k}/${total}</span>`;
+  return `<span style="color:#94a3b8">${k}/${total}</span>`;
+}
+function updateWinPrediction() {
+  const g = currentGame();
+  const noData = !matchup.counters.size && !matchup.synergies.size;
+  if (noData) {
+    els.winPrediction.innerHTML = '<div class="wp-empty" style="color:#64748b;font-size:11px;text-align:center;padding:4px 0">No matchup data loaded. Load CSV files below to see prediction.</div>';
+    return;
+  }
+  if (g.bluePicks.length < 5 || g.redPicks.length < 5) {
+    els.winPrediction.innerHTML = '<div class="wp-empty" style="color:#64748b;font-size:11px;text-align:center;padding:4px 0">Complete picks for both teams to see prediction.</div>';
+    return;
+  }
+  const blueStats = getTeamStats(g.bluePicks, g.redPicks);
+  const redStats  = getTeamStats(g.redPicks,  g.bluePicks);
+  const S_blue = blueStats.sy.mean + blueStats.co.mean;
+  const S_red  = redStats.sy.mean  + redStats.co.mean;
+  const totalS = S_blue + S_red;
+  const blueWin = totalS > 0 ? (S_blue / totalS) * 100 : 50;
+  const redWin  = 100 - blueWin;
+  const varS_blue = blueStats.sy.variance + blueStats.co.variance;
+  const varS_red  = redStats.sy.variance  + redStats.co.variance;
+  const sigmaS_blue = Math.sqrt(varS_blue);
+  const sigmaS_red  = Math.sqrt(varS_red);
+  let ciLow = blueWin, ciHigh = blueWin;
+  if (sigmaS_blue > 0 || sigmaS_red > 0) {
+    const ci = monteCarloBlueWin(2000, S_blue, sigmaS_blue, S_red, sigmaS_red);
+    ciLow = ci.ciLow; ciHigh = ci.ciHigh;
+  }
+  const redCILow  = 100 - ciHigh;
+  const redCIHigh = 100 - ciLow;
+  function fmtSy(s){ return `Sy ${(s.mean*100).toFixed(0)}% ${coverageBadge(s.k, s.total)}`; }
+  function fmtCo(s){ return `Co ${(s.mean*100).toFixed(0)}% ${coverageBadge(s.k, s.total)}`; }
+  els.winPrediction.innerHTML = `
+    <div class="wp-bar">
+      <div class="wp-blue" style="width: ${blueWin}%"></div>
+      <div class="wp-red" style="width: ${redWin}%"></div>
+      <div class="wp-ci-band" style="left: ${ciLow}%; width: ${Math.max(0, ciHigh - ciLow)}%" title="95% CI for blue win: ${ciLow.toFixed(1)}% – ${ciHigh.toFixed(1)}%"></div>
+    </div>
+    <div class="wp-labels">
+      <span class="wp-label-blue">${blueWin.toFixed(1)}%</span>
+      <span class="wp-label-red">${redWin.toFixed(1)}%</span>
+    </div>
+    <div class="wp-ci-text">
+      <span>95% CI: ${ciLow.toFixed(1)}–${ciHigh.toFixed(1)}%</span>
+      <span>95% CI: ${redCILow.toFixed(1)}–${redCIHigh.toFixed(1)}%</span>
+    </div>
+    <div class="wp-details">
+      <span>${fmtSy(blueStats)} · ${fmtCo(blueStats)}</span>
+      <span>${fmtSy(redStats)} · ${fmtCo(redStats)}</span>
+    </div>
+    <div class="wp-note">
+      All pairs counted · (k/N) = pairs with real data · missing pairs imputed at 50%<br>
+      CI from per-pair binomial sampling uncertainty
+    </div>
+  `;
+}
+
+/* ============================================================
+   Matchup CSV loading
+   ============================================================ */
+function updateMatchupStatus(loading) {
+  const el = els.matchupStatus;
+  if (!el) return;
+  if (loading) { el.innerHTML = 'Loading matchup data…'; return; }
+  const c = matchup.counters.size, s = matchup.synergies.size;
+  if (!c && !s) {
+    el.innerHTML = 'No matchup data loaded. Load CSV files below, or place <code>hok_hero_counters.csv</code> and <code>hok_hero_synergies.csv</code> next to this file.';
+  } else {
+    el.innerHTML = `⚔ ${c.toLocaleString()} counter pairs · 🤝 ${s.toLocaleString()} synergy pairs`;
+  }
+}
+
+async function handleCsvFiles(files) {
+  let loaded = 0;
+  for (const f of files) {
+    let text;
+    try { text = await f.text(); } catch { continue; }
+    let type = detectCsvType(text);
+    if (!type) {
+      const n = f.name.toLowerCase();
+      if (n.includes('synerg')) type = 'synergy';
+      else if (n.includes('counter')) type = 'counter';
+    }
+    if (!type) continue;
+    ingestCsv(text, type);
+    loaded++;
+  }
+  heroKeyCache.clear();
+  updateMatchupStatus();
+  updateWinPrediction();
+  if (loaded) toast('Matchup data loaded');
+  else toast('No valid CSV found');
+}
+
+async function autoLoadMatchups() {
+  updateMatchupStatus(true);
+  const sources = [
+    { url: 'hok_hero_counters.csv', type: 'counter' },
+    { url: 'hok_hero_synergies.csv', type: 'synergy' },
+  ];
+  for (const src of sources) {
+    try {
+      const res = await fetch(src.url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      ingestCsv(await res.text(), src.type);
+    } catch (e) { /* file:// or missing */ }
+  }
+  heroKeyCache.clear();
+  updateMatchupStatus();
+  updateWinPrediction();
+}
+
+/* ============================================================
+   Similar Match History
+   ------------------------------------------------------------
+   Ingests hok_matches_base.csv. Its picks_1/picks_2 cells are
+   Python list reprs, e.g. "['Allain', 'Edras', 'Zata']", so we
+   pull out the quoted strings. Similarity score = max over
+   orientations of (blue∩A + red∩B) vs (blue∩B + red∩A).
+   Clickable cards open VOD if present, else tournament page.
+   ============================================================ */
+const matchHistory = { matches: [], loaded: false };
+const matchSeen = new Set();
+let heroNameMapCache = null;
+
+function buildHeroNameMap() {
+  if (heroNameMapCache) return heroNameMapCache;
+  const map = new Map();
+  for (const h of DATA.heroes) {
+    for (const k of nameKeys(h.name)) map.set(k, h.id);
+    map.set(normKey(h.id), h.id);
+  }
+  heroNameMapCache = map;
+  return map;
+}
+
+function heroTitleToId(title, nameMap) {
+  const keys = nameKeys(title);
+  for (const k of keys) if (nameMap.has(k)) return nameMap.get(k);
+  return null;
+}
+
+function parsePicksList(cell) {
+  if (!cell) return [];
+  const s = String(cell).trim();
+  if (!s) return [];
+  const items = [];
+  const re = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"/g;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const val = (m[1] !== undefined ? m[1] : m[2]).replace(/\\(.)/g, '$1');
+    if (val) items.push(val);
+  }
+  return items;
+}
+
+function ingestMatchHistory(text) {
+  const rows = parseCSV(text);
+  if (!rows.length) return 0;
+  const header = rows[0].map(h => normKey(h).replace(/ /g, '_'));
+  const idx = name => header.indexOf(name);
+  const iMatchId = idx('match_id');
+  const iPicks1 = idx('picks_1');
+  const iPicks2 = idx('picks_2');
+  const iTeam1Name = idx('team_1_name');
+  const iTeam2Name = idx('team_2_name');
+  const iTeam1Won = idx('team_1_won');
+  const iDate = idx('date');
+  const iTier = idx('tier');
+  const iTournament = idx('tournament');
+  const iVod = idx('vod_link');
+  const iTournLink = idx('tournament_link');
+  const iScore = idx('score');
+  if (iPicks1 < 0 || iPicks2 < 0) return 0;
+  let count = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 2) continue;
+    const matchId = iMatchId >= 0 && r[iMatchId] ? r[iMatchId] : `row_${i}`;
+    if (matchSeen.has(matchId)) continue;
+    matchSeen.add(matchId);
+    matchHistory.matches.push({
+      matchId,
+      picks1Titles: parsePicksList(r[iPicks1]),
+      picks2Titles: parsePicksList(r[iPicks2]),
+      team1Name: iTeam1Name >= 0 ? (r[iTeam1Name] || '') : '',
+      team2Name: iTeam2Name >= 0 ? (r[iTeam2Name] || '') : '',
+      team1Won: iTeam1Won >= 0 ? (parseInt(r[iTeam1Won], 10) || 0) : 0,
+      date: iDate >= 0 ? (r[iDate] || '') : '',
+      tier: iTier >= 0 ? (r[iTier] || '') : '',
+      tournament: iTournament >= 0 ? (r[iTournament] || '') : '',
+      vodLink: iVod >= 0 ? (r[iVod] || '') : '',
+      tournamentLink: iTournLink >= 0 ? (r[iTournLink] || '') : '',
+      score: iScore >= 0 ? (r[iScore] || '') : '',
+    });
+    count++;
+  }
+  if (count) matchHistory.loaded = true;
+  return count;
+}
+
+function updateSimilarStatus(loading) {
+  const el = els.similarPanelStatus;
+  if (!el) return;
+  if (loading) { el.textContent = 'Loading match history…'; return; }
+  if (!matchHistory.loaded) {
+    el.innerHTML = 'Not loaded. Place <code>hok_matches_base.csv</code> next to this file, or click <b>Load Match History CSV</b>.';
+  } else {
+    el.innerHTML = `📚 Loaded <b>${matchHistory.matches.length.toLocaleString()}</b> matches. Fill at least one pick per team, then click <b>Find Similar Matches</b>.`;
+  }
+}
+
+async function handleMatchFiles(files) {
+  let total = 0;
+  for (const f of files) {
+    let text;
+    try { text = await f.text(); } catch { continue; }
+    total += ingestMatchHistory(text);
+  }
+  updateSimilarStatus();
+  updateSimilarButton();
+  if (total) toast(`${total} matches loaded`);
+  else toast('No valid match CSV found');
+}
+
+async function autoLoadMatchHistory() {
+  updateSimilarStatus(true);
+  try {
+    const res = await fetch('hok_matches_base.csv', { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    ingestMatchHistory(await res.text());
+  } catch (e) { /* file:// or missing */ }
+  updateSimilarStatus();
+  updateSimilarButton();
+}
+
+function updateSimilarButton() {
+  if (!els.findSimilarBtn) return;
+  const g = currentGame();
+  const canSearch = matchHistory.loaded && (g.bluePicks.length > 0 || g.redPicks.length > 0);
+  els.findSimilarBtn.disabled = !canSearch;
+}
+
+function overlapCount(set, list) {
+  let n = 0;
+  for (const x of list) if (set.has(x)) n++;
+  return n;
+}
+
+function scoreMatch(blueIds, redIds, aIds, bIds) {
+  const blueSet = new Set(blueIds);
+  const redSet = new Set(redIds);
+  const fwd = overlapCount(blueSet, aIds) + overlapCount(redSet, bIds);
+  const bwd = overlapCount(blueSet, bIds) + overlapCount(redSet, aIds);
+  if (fwd >= bwd) return { score: fwd, blueIsTeamA: true };
+  return { score: bwd, blueIsTeamA: false };
+}
+
+function findSimilarMatches() {
+  const g = currentGame();
+  const blueIds = g.bluePicks.slice();
+  const redIds = g.redPicks.slice();
+  if (blueIds.length === 0 && redIds.length === 0) {
+    return { error: 'Need at least one pick to search.' };
+  }
+  const nameMap = buildHeroNameMap();
+  const results = [];
+  for (const m of matchHistory.matches) {
+    const aIds = m.picks1Titles.map(t => heroTitleToId(t, nameMap)).filter(Boolean);
+    const bIds = m.picks2Titles.map(t => heroTitleToId(t, nameMap)).filter(Boolean);
+    if (!aIds.length && !bIds.length) continue;
+    const { score, blueIsTeamA } = scoreMatch(blueIds, redIds, aIds, bIds);
+    if (score > 0) results.push({ match: m, aIds, bIds, score, blueIsTeamA });
+  }
+  results.sort((x, y) => y.score - x.score);
+  // Prefer matches with score ≥ 3. If fewer than 3 pass, relax to top 3 by score.
+  let filtered = results.filter(r => r.score >= 3);
+  if (filtered.length < 3) filtered = results.slice(0, 3);
+  return { results: filtered.slice(0, 5), threshold: filtered.length < 3 ? 'relaxed' : 'strict' };
+}
+
+function renderSimilarPick(heroId, title, isMatched) {
+  const hero = heroId ? DATA.heroes.find(h => h.id === heroId) : null;
+  const display = hero ? hero.name : (title || '?');
+  const inner = hero && hero.img
+    ? `<img src="${hero.img}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${display.slice(0,2).replace(/'/g,'')}'">`
+    : display.slice(0, 2);
+  const cls = 'similar-match-pick ' + (isMatched ? 'matched' : 'unmatched');
+  return `<span class="${cls}" title="${display.replace(/"/g,'&quot;')}">${inner}</span>`;
+}
+
+function renderSimilarCard(item, blueIds, redIds) {
+  const { match, aIds, bIds, score, blueIsTeamA } = item;
+  const blueSet = new Set(blueIds);
+  const redSet = new Set(redIds);
+  const blueTitles = blueIsTeamA ? match.picks1Titles : match.picks2Titles;
+  const redTitles  = blueIsTeamA ? match.picks2Titles : match.picks1Titles;
+  const blueIdList = blueIsTeamA ? aIds : bIds;
+  const redIdList  = blueIsTeamA ? bIds : aIds;
+  const blueTeamName = blueIsTeamA ? match.team1Name : match.team2Name;
+  const redTeamName  = blueIsTeamA ? match.team2Name : match.team1Name;
+  const blueWon = blueIsTeamA ? !!match.team1Won : !match.team1Won;
+  const blueWonClass = blueWon ? 'win' : 'loss';
+  const redWonClass  = blueWon ? 'loss' : 'win';
+
+  const bluePicksHtml = blueIdList.map((id, i) =>
+    renderSimilarPick(id, blueTitles[i] || '', blueSet.has(id))
+  ).join('');
+  const redPicksHtml = redIdList.map((id, i) =>
+    renderSimilarPick(id, redTitles[i] || '', redSet.has(id))
+  ).join('');
+
+  const titleParts = [];
+  if (match.tournament) titleParts.push(match.tournament);
+  if (match.tier) titleParts.push(match.tier);
+  const titleLine = titleParts.join(' · ') || 'Match';
+
+  const metaParts = [];
+  if (match.date) metaParts.push(match.date);
+  const metaLine = metaParts.join(' · ');
+
+  const link = match.vodLink || match.tournamentLink || '';
+  const linkLabel = match.vodLink ? '▶ Watch VOD' : (match.tournamentLink ? '↗ Tournament page' : '');
+  const wrapper = link ? 'a' : 'div';
+  const wrapperAttrs = link
+    ? `href="${link.replace(/"/g,'&quot;')}" target="_blank" rel="noopener noreferrer" class="similar-match clickable"`
+    : `class="similar-match"`;
+
+  const blueTeamSafe = (blueTeamName || 'Team A').replace(/[<>]/g, '');
+  const redTeamSafe  = (redTeamName  || 'Team B').replace(/[<>]/g, '');
+
+  return `
+    <${wrapper} ${wrapperAttrs}>
+      <div class="similar-match-header">
+        <span class="similar-match-title">${titleLine}</span>
+        <span class="similar-match-score">${match.score || '—'}</span>
+      </div>
+      ${metaLine ? `<div class="similar-match-meta">${metaLine}</div>` : ''}
+      <div class="similar-match-team">
+        <span class="similar-match-team-name blue">${blueTeamSafe}</span>
+        <span class="similar-match-picks">${bluePicksHtml}</span>
+        <span class="similar-match-result ${blueWonClass}">${blueWon ? 'WIN' : 'LOSS'}</span>
+      </div>
+      <div class="similar-match-team">
+        <span class="similar-match-team-name red">${redTeamSafe}</span>
+        <span class="similar-match-picks">${redPicksHtml}</span>
+        <span class="similar-match-result ${redWonClass}">${blueWon ? 'LOSS' : 'WIN'}</span>
+      </div>
+      <div class="similar-match-footer">
+        <span class="similar-match-simscore">Similarity: <b>${score}/10</b></span>
+        <span class="similar-match-link">${linkLabel}</span>
+      </div>
+    </${wrapper}>
+  `;
+}
+
+function showSimilarResults() {
+  const g = currentGame();
+  const blueIds = g.bluePicks.slice();
+  const redIds = g.redPicks.slice();
+  const result = findSimilarMatches();
+  if (result.error) {
+    els.similarResults.innerHTML = `<div class="similar-empty">${result.error}</div>`;
+    return;
+  }
+  if (!result.results.length) {
+    els.similarResults.innerHTML = '<div class="similar-empty">No similar matches found in the loaded data.</div>';
+    return;
+  }
+  els.similarResults.innerHTML = result.results
+    .map(item => renderSimilarCard(item, blueIds, redIds))
+    .join('');
+}
+
+/* ============================================================
+   Data Helper (unchanged)
+   ============================================================ */
+const slug = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const prettify = s => s.replace(/[-_]+/g, ' ').replace(/\.[^.]+$/, '').trim();
+const helperState = { heroFiles: [], mapFiles: [] };
+
+function updateHelperList(listEl, files) {
+  listEl.innerHTML = '';
+  for (const f of files) {
+    const li = document.createElement('li');
+    li.textContent = f.name;
+    listEl.appendChild(li);
+  }
+}
+
+function buildDataJs() {
+  const heroes = helperState.heroFiles.map(f => {
+    const name = prettify(f.name);
+    return { id: slug(name), name, img: 'HEROES/' + f.name };
+  });
+  const maps = helperState.mapFiles.length
+    ? helperState.mapFiles.map(f => {
+        const name = prettify(f.name);
+        return { id: slug(name), name, img: 'MAPS/' + f.name };
+      })
+    : DATA.maps;
+  return [
+    '// Auto-generated by Draft Simulator — feel free to edit.',
+    '// Shared with the tactical board (HEROES + MAPS).',
+    'window.HEROES = [',
+    ...heroes.map(h => `  { id: ${JSON.stringify(h.id)}, name: ${JSON.stringify(h.name)}, img: ${JSON.stringify(h.img)} },`),
+    '];',
+    '',
+    'window.MAPS = [',
+    ...maps.map(m => `  { id: ${JSON.stringify(m.id)}, name: ${JSON.stringify(m.name)}, img: ${JSON.stringify(m.img)} },`),
+    '];',
+    ''
+  ].join('\n');
+}
+function refreshHelper() { els.helperOutput.value = buildDataJs(); }
+
+/* ============================================================
+   Event listeners
+   ============================================================ */
+els.matchupLoadBtn.addEventListener('click', () => els.matchupFiles.click());
+els.matchupFiles.addEventListener('change', e => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  handleCsvFiles(files);
+});
+
+els.loadMatchesBtn.addEventListener('click', () => els.matchesFiles.click());
+els.matchesFiles.addEventListener('change', e => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  handleMatchFiles(files);
+});
+els.findSimilarBtn.addEventListener('click', showSimilarResults);
+
+document.getElementById('helperBtn').addEventListener('click', () => {
+  els.helperModal.hidden = false; refreshHelper();
+});
+document.getElementById('helperClose').addEventListener('click', () => els.helperModal.hidden = true);
+els.helperHeroFiles.addEventListener('change', e => {
+  helperState.heroFiles = Array.from(e.target.files || []);
+  updateHelperList(els.helperHeroList, helperState.heroFiles);
+  refreshHelper();
+});
+els.helperMapFiles.addEventListener('change', e => {
+  helperState.mapFiles = Array.from(e.target.files || []);
+  updateHelperList(els.helperMapList, helperState.mapFiles);
+  refreshHelper();
+});
+document.getElementById('helperCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(els.helperOutput.value); toast('Copied'); }
+  catch { els.helperOutput.select(); document.execCommand('copy'); toast('Copied'); }
+});
+document.getElementById('helperDownload').addEventListener('click', () => {
+  const blob = new Blob([els.helperOutput.value], { type: 'text/javascript' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'data.js';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('data.js downloaded');
+});
+
+els.seriesFormat.addEventListener('change', () => {
+  state.series.format = els.seriesFormat.value;
+  renderSeriesBar();
+  scheduleSave();
+});
+els.nextGameBtn.addEventListener('click', addNextGame);
+els.resetSeriesBtn.addEventListener('click', resetSeries);
+els.heroSearch.addEventListener('input', () => {
+  state.heroSearch = els.heroSearch.value;
+  renderHeroGrid();
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const data = { app: 'hok-draft-simulator', version: 1, savedAt: new Date().toISOString(), series: state.series };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hok-draft-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('Draft saved');
+});
+
+document.getElementById('loadBtn').addEventListener('click', () => document.getElementById('loadInput').click());
+document.getElementById('loadInput').addEventListener('change', e => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result));
+      if (data && data.series && Array.isArray(data.series.games)) {
+        state.series = data.series;
+        renderAll();
+        scheduleSave();
+        toast('Draft loaded');
+      } else alert('Invalid draft file.');
+    } catch { alert('Could not read that file.'); }
+  };
+  reader.readAsText(f);
+});
+
+/* ============================================================
+   Init
+   ============================================================ */
+function init() {
+  loadStored();
+  renderAll();
+  autoLoadMatchups();
+  autoLoadMatchHistory();
+}
+init();
+</script>
+</body>
+</html>
