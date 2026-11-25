@@ -129,6 +129,7 @@ button,select,input,textarea{font-family:inherit}
 .similar-status{font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:10px}
 .similar-status code{color:#a5b4fc;background:rgba(165,180,252,.12);padding:1px 5px;border-radius:3px}
 .similar-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px}
+@media(max-width:520px){.similar-results{grid-template-columns:1fr}}
 .similar-empty{grid-column:1/-1;text-align:center;padding:20px;color:#64748b;font-size:12px;line-height:1.6}
 
 .similar-match{
@@ -137,17 +138,16 @@ button,select,input,textarea{font-family:inherit}
   text-decoration:none;color:inherit;font-size:12px;
   transition:box-shadow .15s,background .15s;
 }
-.similar-match.clickable{cursor:pointer}
-.similar-match.clickable:hover{background:rgba(99,102,241,.10);box-shadow:inset 0 0 0 1px rgba(99,102,241,.5)}
+.similar-match:hover{background:rgba(99,102,241,.08);box-shadow:inset 0 0 0 1px rgba(99,102,241,.35)}
 
-.similar-match-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;gap:8px}
-.similar-match-title{color:#cbd5e1;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
-.similar-match-score{color:#fbbf24;font-weight:800;font-size:13px;white-space:nowrap}
+.similar-match-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;gap:8px}
+.similar-match-title{color:#e2e8f0;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.similar-match-score{color:#fbbf24;font-weight:800;font-size:12px;white-space:nowrap}
 
-.similar-match-meta{font-size:10.5px;color:#94a3b8;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.similar-match-meta{font-size:10.5px;color:#94a3b8;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .similar-match-team{display:flex;align-items:center;gap:6px;margin-bottom:4px}
-.similar-match-team-name{width:100px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.similar-match-team-name{width:110px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
 .similar-match-team-name.blue{color:#93c5fd;font-weight:600}
 .similar-match-team-name.red{color:#fca5a5;font-weight:600}
 
@@ -165,10 +165,15 @@ button,select,input,textarea{font-family:inherit}
 .similar-match-result.win{background:rgba(34,197,94,.2);color:#22c55e}
 .similar-match-result.loss{background:rgba(239,68,68,.2);color:#ef4444}
 
-.similar-match-footer{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px}
+.similar-match-footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap}
 .similar-match-simscore{font-size:10px;color:#94a3b8;font-weight:600}
 .similar-match-simscore b{color:#a5b4fc}
-.similar-match-link{font-size:10px;color:#6366f1;font-weight:700;text-align:right}
+.similar-match-links{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.similar-match-link{font-size:10.5px;color:#818cf8;font-weight:700;text-decoration:none}
+.similar-match-link:hover{text-decoration:underline;color:#a5b4fc}
+.similar-match-link.vod{color:#34d399}
+.similar-match-link.vod:hover{color:#6ee7b7}
+
 .draft-history-content{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:14px}
 .history-game{background:rgba(0,0,0,.25);border-radius:10px;padding:12px;box-shadow:inset 0 0 0 1px var(--ring)}
 .history-game h3{margin:0 0 10px;font-size:13px;color:#fbbf24}
@@ -436,6 +441,24 @@ function nameKeys(name) {
   return keys;
 }
 
+function escapeHtml(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatMatchDate(rawDate, timestamp) {
+  const clean = cleanCell(rawDate);
+  if (clean) return clean;
+  const ts = parseInt(cleanCell(timestamp), 10);
+  if (!Number.isFinite(ts) || ts <= 0) return '';
+  const dt = new Date(ts * 1000);
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toISOString().slice(0, 10);
+}
+
 /* ============================================================
    Matchup data (counters / synergies)
    ============================================================ */
@@ -443,7 +466,6 @@ const matchup = { counters: new Map(), synergies: new Map(), names: new Set() };
 const heroKeyCache = new Map();
 
 function parseCSV(text) {
-  // Strip BOM
   text = String(text || '').replace(/^\uFEFF/, '');
   const rows = [];
   let cells = [];
@@ -1188,17 +1210,7 @@ async function autoLoadMatchups() {
 }
 
 /* ============================================================
-   Similar Match History  (robust loader)
-   ------------------------------------------------------------
-   Accepts many column-name variations:
-     picks_1 / picks1 / pick_1 / pick1 / team_1_picks / team1_picks
-     team_1_name / team1_name / team1 / team_a_name / teamA
-     team_1_won / team1_won / team1won / won / winner
-     vod_link / vod / vodlink / video_link
-     tournament_link / tournamentlink / tournament_url
-     score / series_score / result
-   Handles BOM, CRLF, multi-line quoted fields (Python list reprs),
-   and cleans "nan"/"NaN"/"None" values emitted by pandas.
+   Similar Match History
    ============================================================ */
 const matchHistory = { matches: [], loaded: false };
 const matchSeen = new Set();
@@ -1221,21 +1233,56 @@ function heroTitleToId(title, nameMap) {
   return null;
 }
 
+// Parses Python/JSON stringified lists like ['Agudo', "Ao'yin", 'Biron']
 function parsePicksList(cell) {
   if (!cell) return [];
   const s = String(cell).trim();
   if (!s) return [];
+  if (s.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(s);
+      if (Array.isArray(parsed)) return parsed.map(x => String(x).trim()).filter(Boolean);
+    } catch (_) { /* fall through to single-quote parser */ }
+  }
   const items = [];
-  const re = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"/g;
-  let m;
-  while ((m = re.exec(s)) !== null) {
-    const val = (m[1] !== undefined ? m[1] : m[2]).replace(/\\(.)/g, '$1');
-    if (val) items.push(val);
+  let i = s.startsWith('[') ? 1 : 0;
+  while (i < s.length) {
+    while (i < s.length && /[\s,\]]/.test(s[i])) i++;
+    if (i >= s.length) break;
+    const quote = s[i];
+    if (quote === "'" || quote === '"') {
+      i++;
+      let val = '';
+      while (i < s.length) {
+        const ch = s[i];
+        if (ch === '\\' && i + 1 < s.length) {
+          val += s[i + 1];
+          i += 2;
+          continue;
+        }
+        if (ch === quote) {
+          // Look ahead: if followed by comma, closing bracket, or end, this closes the element
+          const rest = s.slice(i + 1).trimStart();
+          if (!rest || rest.startsWith(',') || rest.startsWith(']')) {
+            i++;
+            break;
+          }
+        }
+        val += ch;
+        i++;
+      }
+      if (val.trim()) items.push(val.trim());
+    } else {
+      let end = s.indexOf(',', i);
+      if (end < 0) end = s.length;
+      const val = s.slice(i, end).replace(/\]$/, '').trim();
+      if (val) items.push(val);
+      i = end + 1;
+    }
   }
   return items;
 }
 
-// Clean "nan"/"NaN"/"None"/"null" strings from pandas exports
 function cleanCell(val) {
   if (val === undefined || val === null) return '';
   const s = String(val).trim();
@@ -1254,105 +1301,50 @@ function findHeader(header, candidates) {
   return -1;
 }
 
-// Does a cell look like a Python list of hero names?
-function looksLikePicksList(val) {
-  const s = String(val == null ? '' : val).trim();
-  if (!s) return false;
-  if (/^\[\s*['"]/.test(s)) return true;   // ['...'] or ["..."]
-  return /['"]/.test(s);                    // contains a quoted token
-}
-
-// Unix seconds / milliseconds → YYYY-MM-DD; pass real date strings through; drop junk
-function formatDateCell(val) {
-  const s = cleanCell(val);
-  if (!s) return '';
-  const n = Number(s);
-  if (Number.isFinite(n) && n > 1e9 && n < 1e13) {
-    const ms = n > 1e12 ? n : n * 1000;
-    const d = new Date(ms);
-    if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  }
-  if (/\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s)) return s;
-  return '';
-}
-
 function ingestMatchHistory(text) {
   const clean = String(text || '').replace(/^\uFEFF/, '');
   const rows = parseCSV(clean);
   if (!rows.length) return 0;
   const header = rows[0].map(h => normKey(h).replace(/ /g, '_'));
 
-  const iMatchId   = findHeader(header, ['match_id','matchid','game_id','gameid','id','match']);
-  const iDate      = findHeader(header, ['date','match_date','matchdate','datetime','game_date',
-                                         'timestamp','time','unix_time','unixtime','epoch']);
-  const iTier      = findHeader(header, ['tier','league_tier','event_tier']);
-  const iTournament= findHeader(header, ['tournament','event','competition','league','tournament_name']);
-  const iVod       = findHeader(header, ['vod_link','vod','vodlink','video_link','videolink','stream_link','streamlink']);
-  const iTournLink = findHeader(header, ['tournament_link','tournamentlink','tournament_url','tournamenturl','event_link','eventlink']);
-  const iScore     = findHeader(header, ['score','series_score','seriesscore','result','match_score','matchscore']);
-
-  // ---- picks: explicit column names first
-  let iPicks1 = findHeader(header, [
-    'picks_1','picks1','pick_1','pick1',
-    'team_1_picks','team1_picks','team1picks',
-    'team_a_picks','teama_picks','picks_team_1','picks_team1'
-  ]);
-  let iPicks2 = findHeader(header, [
-    'picks_2','picks2','pick_2','pick2',
-    'team_2_picks','team2_picks','team2picks',
-    'team_b_picks','teamb_picks','picks_team_2','picks_team2'
-  ]);
-
-  // ---- picks fallback: some exports use team_a / team_b *as* the pick lists
-  const idxTeamA = header.indexOf('team_a');
-  const idxTeamB = header.indexOf('team_b');
-  const testRow  = rows[1] || [];
-  if (iPicks1 < 0 && idxTeamA >= 0 && looksLikePicksList(testRow[idxTeamA])) iPicks1 = idxTeamA;
-  if (iPicks2 < 0 && idxTeamB >= 0 && looksLikePicksList(testRow[idxTeamB])) iPicks2 = idxTeamB;
+  const iMatchId     = findHeader(header, ['match_id','matchid','game_id','gameid','id','match']);
+  const iPicks1      = findHeader(header, ['team_a','picks_1','picks1','pick_1','pick1','team_1_picks','team1_picks','team1picks','team_a_picks','teama_picks','picks_team_1','picks_team1']);
+  const iPicks2      = findHeader(header, ['team_b','picks_2','picks2','pick_2','pick2','team_2_picks','team2_picks','team2picks','team_b_picks','teamb_picks','picks_team_2','picks_team2']);
+  const iTeam1Name   = findHeader(header, ['team_a_name','team_1_name','team1_name','team1name','team_1','team1','teama_name','teama','team_a']);
+  const iTeam2Name   = findHeader(header, ['team_b_name','team_2_name','team2_name','team2name','team_2','team2','teamb_name','teamb','team_b']);
+  const iTeam1Won    = findHeader(header, ['team_a_win','team_1_won','team1_won','team1won','team_1_win','team1_win','team1win','won','winner','team_1_result','team1_result']);
+  const iTimestamp   = findHeader(header, ['timestamp','ts','unix_timestamp']);
+  const iDate        = findHeader(header, ['date','match_date','matchdate','datetime','game_date']);
+  const iTier        = findHeader(header, ['tier','league_tier','event_tier']);
+  const iTournament  = findHeader(header, ['tournament','event','competition','league','tournament_name']);
+  const iVod         = findHeader(header, ['vod_url','vod_link','vod','vodlink','video_link','videolink','stream_link','streamlink']);
+  const iTournLink   = findHeader(header, ['tournament_link','tournamentlink','tournament_url','tournamenturl','event_link','eventlink']);
+  const iScore       = findHeader(header, ['score','series_score','seriesscore','result','match_score','matchscore']);
 
   if (iPicks1 < 0 || iPicks2 < 0) {
-    console.warn('[Match History] Required picks columns not found. Header was:', header);
+    console.warn('[Match History] Required pick columns not found. Header was:', header);
     return 0;
   }
-
-  // ---- team names: only fall back to team_a/team_b when they weren't hijacked for picks
-  let iTeam1Name = findHeader(header, ['team_1_name','team1_name','team1name','team_a_name','teama_name']);
-  let iTeam2Name = findHeader(header, ['team_2_name','team2_name','team2name','team_b_name','teamb_name']);
-  if (iTeam1Name < 0 && idxTeamA >= 0 && idxTeamA !== iPicks1) iTeam1Name = idxTeamA;
-  if (iTeam2Name < 0 && idxTeamB >= 0 && idxTeamB !== iPicks2) iTeam2Name = idxTeamB;
-
-  // ---- winner flag
-  const iTeam1Won = findHeader(header, [
-    'team_1_won','team1_won','team1won',
-    'team_a_win','team_a_won','teama_win','teama_won',
-    'team_1_win','team1_win','team1win',
-    'won','winner','team_1_result','team1_result'
-  ]);
 
   let count = 0;
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || r.length < 2) continue;
-
     const matchId = (iMatchId >= 0 && cleanCell(r[iMatchId])) ? cleanCell(r[iMatchId]) : `row_${i}`;
     if (matchSeen.has(matchId)) continue;
-
-    const aTitles = parsePicksList(r[iPicks1]);
-    const bTitles = parsePicksList(r[iPicks2]);
-    if (!aTitles.length && !bTitles.length) continue;   // skip garbage/empty rows
-
     matchSeen.add(matchId);
     matchHistory.matches.push({
       matchId,
-      picks1Titles: aTitles,
-      picks2Titles: bTitles,
+      picks1Titles:   parsePicksList(r[iPicks1]),
+      picks2Titles:   parsePicksList(r[iPicks2]),
       team1Name:      iTeam1Name   >= 0 ? cleanCell(r[iTeam1Name])   : '',
       team2Name:      iTeam2Name   >= 0 ? cleanCell(r[iTeam2Name])   : '',
       team1Won:       iTeam1Won    >= 0 ? (parseInt(cleanCell(r[iTeam1Won]), 10) || 0) : 0,
-      date:           iDate        >= 0 ? formatDateCell(r[iDate])   : '',
+      timestamp:      iTimestamp   >= 0 ? cleanCell(r[iTimestamp])   : '',
+      date:           iDate        >= 0 ? cleanCell(r[iDate])        : '',
       tier:           iTier        >= 0 ? cleanCell(r[iTier])        : '',
       tournament:     iTournament  >= 0 ? cleanCell(r[iTournament])  : '',
-      vodLink:        iVod         >= 0 ? cleanCell(r[iVod])         : '',
+      vodUrl:         iVod         >= 0 ? cleanCell(r[iVod])         : '',
       tournamentLink: iTournLink   >= 0 ? cleanCell(r[iTournLink])   : '',
       score:          iScore       >= 0 ? cleanCell(r[iScore])       : '',
     });
@@ -1452,10 +1444,20 @@ function renderSimilarPick(heroId, title, isMatched) {
   const hero = heroId ? DATA.heroes.find(h => h.id === heroId) : null;
   const display = hero ? hero.name : (title || '?');
   const inner = hero && hero.img
-    ? `<img src="${hero.img}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${display.slice(0,2).replace(/'/g,'')}'">`
-    : display.slice(0, 2);
+    ? `<img src="${escapeHtml(hero.img)}" alt="" onerror="this.style.display='none';this.parentNode.textContent='${escapeHtml(display.slice(0,2).replace(/'/g,''))}'">`
+    : escapeHtml(display.slice(0, 2));
   const cls = 'similar-match-pick ' + (isMatched ? 'matched' : 'unmatched');
-  return `<span class="${cls}" title="${display.replace(/"/g,'&quot;')}">${inner}</span>`;
+  return `<span class="${cls}" title="${escapeHtml(display)}">${inner}</span>`;
+}
+
+function buildSearchUrls(teamA, teamB, tournament) {
+  const query = encodeURIComponent(
+    `${teamA} vs ${teamB}${tournament ? ' ' + tournament : ''} Honor of Kings`
+  );
+  return {
+    bilibiliUrl: `https://search.bilibili.com/all?keyword=${query}`,
+    liquipediaUrl: `https://liquipedia.net/honorofkings/index.php?search=${query}`,
+  };
 }
 
 function renderSimilarCard(item, blueIds, redIds, nameMap) {
@@ -1464,13 +1466,12 @@ function renderSimilarCard(item, blueIds, redIds, nameMap) {
   const redSet = new Set(redIds);
   const blueTitles = blueIsTeamA ? match.picks1Titles : match.picks2Titles;
   const redTitles  = blueIsTeamA ? match.picks2Titles : match.picks1Titles;
-  const blueTeamName = cleanCell(blueIsTeamA ? match.team1Name : match.team2Name);
-  const redTeamName  = cleanCell(blueIsTeamA ? match.team2Name : match.team1Name);
+  const blueTeamName = cleanCell(blueIsTeamA ? match.team1Name : match.team2Name) || 'Team A';
+  const redTeamName  = cleanCell(blueIsTeamA ? match.team2Name : match.team1Name) || 'Team B';
   const blueWon = blueIsTeamA ? !!match.team1Won : !match.team1Won;
   const blueWonClass = blueWon ? 'win' : 'loss';
   const redWonClass  = blueWon ? 'loss' : 'win';
 
-  // Align title↔id per slot (no index drift when a title fails to map)
   const bluePicksHtml = blueTitles.map(title => {
     const id = heroTitleToId(title, nameMap);
     return renderSimilarPick(id, title, id && blueSet.has(id));
@@ -1480,44 +1481,50 @@ function renderSimilarCard(item, blueIds, redIds, nameMap) {
     return renderSimilarPick(id, title, id && redSet.has(id));
   }).join('');
 
-  const titleParts = [];
-  if (match.tournament) titleParts.push(match.tournament);
+  const tournamentLabel = match.tournament || 'Tournament N/A';
+  const titleParts = [tournamentLabel];
   if (match.tier) titleParts.push(match.tier);
-  const titleLine = titleParts.join(' · ') || 'Match';
-  const metaLine = match.date || '';
+  const titleLine = titleParts.join(' · ');
 
-  const link = match.vodLink || match.tournamentLink || '';
-  const linkLabel = match.vodLink ? '▶ Watch VOD' : (match.tournamentLink ? '↗ Tournament page' : '');
-  const wrapper = link ? 'a' : 'div';
-  const wrapperAttrs = link
-    ? `href="${link.replace(/"/g,'&quot;')}" target="_blank" rel="noopener noreferrer" class="similar-match clickable"`
-    : `class="similar-match"`;
+  const dateStr = formatMatchDate(match.date, match.timestamp);
+  const metaParts = [`${blueTeamName} vs ${redTeamName}`];
+  if (dateStr) metaParts.push(dateStr);
+  const metaLine = metaParts.join(' · ');
 
-  const blueTeamSafe = (blueTeamName || 'Team A').replace(/[<>]/g, '');
-  const redTeamSafe  = (redTeamName  || 'Team B').replace(/[<>]/g, '');
+  const { bilibiliUrl, liquipediaUrl } = buildSearchUrls(blueTeamName, redTeamName, match.tournament);
+  const vodHtml = match.vodUrl
+    ? `<a class="similar-match-link vod" href="${escapeHtml(match.vodUrl)}" target="_blank" rel="noopener noreferrer">▶ VOD</a>`
+    : '';
+  const extraLink = match.tournamentLink
+    ? `<a class="similar-match-link" href="${escapeHtml(match.tournamentLink)}" target="_blank" rel="noopener noreferrer">↗ Event</a>`
+    : `<a class="similar-match-link" href="${escapeHtml(liquipediaUrl)}" target="_blank" rel="noopener noreferrer">Liquipedia</a>`;
 
   return `
-    <${wrapper} ${wrapperAttrs}>
+    <div class="similar-match">
       <div class="similar-match-header">
-        <span class="similar-match-title">${titleLine}</span>
-        <span class="similar-match-score">${score}/10</span>
+        <span class="similar-match-title" title="${escapeHtml(titleLine)}">${escapeHtml(titleLine)}</span>
+        <span class="similar-match-score">${escapeHtml(match.score || (blueWon ? 'Blue Win' : 'Red Win'))}</span>
       </div>
-      ${metaLine ? `<div class="similar-match-meta">${metaLine}</div>` : ''}
+      <div class="similar-match-meta" title="${escapeHtml(metaLine)}">${escapeHtml(metaLine)}</div>
       <div class="similar-match-team">
-        <span class="similar-match-team-name blue">${blueTeamSafe}</span>
+        <span class="similar-match-team-name blue" title="${escapeHtml(blueTeamName)}">${escapeHtml(blueTeamName)}</span>
         <span class="similar-match-picks">${bluePicksHtml}</span>
         <span class="similar-match-result ${blueWonClass}">${blueWon ? 'WIN' : 'LOSS'}</span>
       </div>
       <div class="similar-match-team">
-        <span class="similar-match-team-name red">${redTeamSafe}</span>
+        <span class="similar-match-team-name red" title="${escapeHtml(redTeamName)}">${escapeHtml(redTeamName)}</span>
         <span class="similar-match-picks">${redPicksHtml}</span>
         <span class="similar-match-result ${redWonClass}">${blueWon ? 'LOSS' : 'WIN'}</span>
       </div>
       <div class="similar-match-footer">
         <span class="similar-match-simscore">Similarity: <b>${score}/10</b></span>
-        <span class="similar-match-link">${linkLabel}</span>
+        <div class="similar-match-links">
+          ${vodHtml}
+          <a class="similar-match-link" href="${escapeHtml(bilibiliUrl)}" target="_blank" rel="noopener noreferrer">Bilibili</a>
+          ${extraLink}
+        </div>
       </div>
-    </${wrapper}>
+    </div>
   `;
 }
 
@@ -1527,7 +1534,7 @@ function showSimilarResults() {
   const redIds = g.redPicks.slice();
   const result = findSimilarMatches();
   if (result.error) {
-    els.similarResults.innerHTML = `<div class="similar-empty">${result.error}</div>`;
+    els.similarResults.innerHTML = `<div class="similar-empty">${escapeHtml(result.error)}</div>`;
     return;
   }
   if (!result.results.length) {
