@@ -1224,36 +1224,63 @@ function parsePicksList(cell) {
 function ingestMatchHistory(text) {
   const rows = parseCSV(text);
   if (!rows.length) return 0;
-  const header = rows[0].map(h => normKey(h).replace(/ /g, '_'));
-  const idx = name => header.indexOf(name);
+
+  // Accept both the simulator's original column names and the schema used by
+  // hok_matches_base.csv (match_id,timestamp,team_a,team_b,team_a_win).
+  const header = rows[0].map(h => normKey(String(h).replace(/^\uFEFF/, '')).replace(/ /g, '_'));
+  const idx = (...names) => {
+    for (const name of names) {
+      const i = header.indexOf(name);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
   const iMatchId = idx('match_id');
-  const iPicks1 = idx('picks_1');
-  const iPicks2 = idx('picks_2');
+  const iPicks1 = idx('picks_1', 'team_a');
+  const iPicks2 = idx('picks_2', 'team_b');
   const iTeam1Name = idx('team_1_name');
   const iTeam2Name = idx('team_2_name');
-  const iTeam1Won = idx('team_1_won');
-  const iDate = idx('date');
+  const iTeam1Won = idx('team_1_won', 'team_a_win');
+  const iDate = idx('date', 'timestamp');
   const iTier = idx('tier');
   const iTournament = idx('tournament');
   const iVod = idx('vod_link');
   const iTournLink = idx('tournament_link');
   const iScore = idx('score');
-  if (iPicks1 < 0 || iPicks2 < 0) return 0;
+
+  if (iPicks1 < 0 || iPicks2 < 0) {
+    matchHistory.loadError = `CSV columns not recognised. Found: ${header.join(', ')}`;
+    return 0;
+  }
+
   let count = 0;
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || r.length < 2) continue;
+    if (!r || r.length <= Math.max(iPicks1, iPicks2)) continue;
+
+    const picks1 = parsePicksList(r[iPicks1]);
+    const picks2 = parsePicksList(r[iPicks2]);
+    if (!picks1.length || !picks2.length) continue;
+
     const matchId = iMatchId >= 0 && r[iMatchId] ? r[iMatchId] : `row_${i}`;
     if (matchSeen.has(matchId)) continue;
+
+    let date = iDate >= 0 ? (r[iDate] || '') : '';
+    // The supplied dataset stores timestamps as Unix seconds.
+    if (iDate >= 0 && header[iDate] === 'timestamp' && date && /^\d+$/.test(date)) {
+      date = new Date(Number(date) * 1000).toISOString().slice(0, 10);
+    }
+
     matchSeen.add(matchId);
     matchHistory.matches.push({
       matchId,
-      picks1Titles: parsePicksList(r[iPicks1]),
-      picks2Titles: parsePicksList(r[iPicks2]),
+      picks1Titles: picks1,
+      picks2Titles: picks2,
       team1Name: iTeam1Name >= 0 ? (r[iTeam1Name] || '') : '',
       team2Name: iTeam2Name >= 0 ? (r[iTeam2Name] || '') : '',
       team1Won: iTeam1Won >= 0 ? (parseInt(r[iTeam1Won], 10) || 0) : 0,
-      date: iDate >= 0 ? (r[iDate] || '') : '',
+      date,
       tier: iTier >= 0 ? (r[iTier] || '') : '',
       tournament: iTournament >= 0 ? (r[iTournament] || '') : '',
       vodLink: iVod >= 0 ? (r[iVod] || '') : '',
@@ -1262,7 +1289,11 @@ function ingestMatchHistory(text) {
     });
     count++;
   }
-  if (count) matchHistory.loaded = true;
+
+  if (count) {
+    matchHistory.loaded = true;
+    matchHistory.loadError = '';
+  }
   return count;
 }
 
@@ -1271,7 +1302,10 @@ function updateSimilarStatus(loading) {
   if (!el) return;
   if (loading) { el.textContent = 'Loading match history…'; return; }
   if (!matchHistory.loaded) {
-    el.innerHTML = 'Not loaded. Place <code>hok_matches_base.csv</code> next to this file, or click <b>Load Match History CSV</b>.';
+    const detail = matchHistory.loadError
+      ? `CSV found, but could not be parsed: ${matchHistory.loadError}`
+      : 'Not loaded. Place <code>hok_matches_base.csv</code> next to this file, or click <b>Load Match History CSV</b>.';
+    el.textContent = detail;
   } else {
     el.innerHTML = `📚 Loaded <b>${matchHistory.matches.length.toLocaleString()}</b> matches. Fill at least one pick per team, then click <b>Find Similar Matches</b>.`;
   }
@@ -1292,11 +1326,17 @@ async function handleMatchFiles(files) {
 
 async function autoLoadMatchHistory() {
   updateSimilarStatus(true);
+  matchHistory.loadError = '';
   try {
     const res = await fetch('hok_matches_base.csv', { cache: 'no-store' });
-    if (!res.ok) throw new Error(res.status);
-    ingestMatchHistory(await res.text());
-  } catch (e) { /* file:// or missing */ }
+    if (!res.ok) throw new Error(`HTTP ${res.status} while loading hok_matches_base.csv`);
+    const loadedCount = ingestMatchHistory(await res.text());
+    if (!loadedCount && !matchHistory.loadError) {
+      matchHistory.loadError = 'No valid match rows found in the CSV.';
+    }
+  } catch (e) {
+    matchHistory.loadError = e && e.message ? e.message : 'Could not fetch hok_matches_base.csv.';
+  }
   updateSimilarStatus();
   updateSimilarButton();
 }
