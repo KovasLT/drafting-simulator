@@ -72,6 +72,17 @@ button,select,input,textarea{font-family:inherit}
 .phase-indicator .phase-value{font-size:14px;font-weight:800;color:var(--gold)}
 .phase-indicator .phase-detail{font-size:12px;color:#cbd5e1}
 .phase-indicator .turn-badge{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.draft-timer{display:flex;align-items:center;gap:8px;margin-left:auto;padding:4px 8px;background:rgba(255,255,255,.05);border-radius:8px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.draft-timer-value{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;color:#fbbf24;min-width:24px;text-align:center}
+.draft-timer-label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
+.draft-timer .btn{font-size:10px;padding:5px 8px}
+.timing-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.timing-team{padding:8px;border-radius:7px;background:rgba(0,0,0,.2)}
+.timing-team strong{display:block;font-size:11px;margin-bottom:5px}
+.timing-team.blue strong{color:#93c5fd}
+.timing-team.red strong{color:#fca5a5}
+.timing-row{display:flex;justify-content:space-between;gap:6px;font-size:10px;color:#94a3b8;margin:3px 0}
+.timing-row b{color:#e2e8f0;font-variant-numeric:tabular-nums}
 .turn-badge.blue{background:rgba(59,130,246,.25);color:#93c5fd}
 .turn-badge.red{background:rgba(239,68,68,.25);color:#fca5a5}
 .win-prediction{display:flex;flex-direction:column;gap:6px}
@@ -159,6 +170,21 @@ button,select,input,textarea{font-family:inherit}
 .similar-match-simscore{font-size:10px;color:#94a3b8;font-weight:600}
 .similar-match-simscore b{color:#a5b4fc}
 .similar-match-link{font-size:10px;color:#6366f1;font-weight:700;text-align:right}
+.draft-history-content{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:14px}
+.history-game{background:rgba(0,0,0,.25);border-radius:10px;padding:12px;box-shadow:inset 0 0 0 1px var(--ring)}
+.history-game h3{margin:0 0 10px;font-size:13px;color:#fbbf24}
+.history-teams{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.history-team{min-width:0}
+.history-team h4{margin:0 0 6px;font-size:11px}
+.history-team.blue h4{color:#93c5fd}
+.history-team.red h4{color:#fca5a5}
+.history-group{margin:7px 0}
+.history-group strong{display:block;color:#94a3b8;font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.history-heroes{display:flex;flex-wrap:wrap;gap:4px}
+.history-hero{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border-radius:5px;padding:3px 5px;font-size:10px;max-width:100%}
+.history-hero img{width:20px;height:20px;object-fit:cover;border-radius:4px}
+.history-empty{color:#64748b;font-size:10px;font-style:italic}
+.history-current{font-size:10px;color:#94a3b8;margin-left:6px}
 </style>
 </head>
 <body>
@@ -184,8 +210,14 @@ button,select,input,textarea{font-family:inherit}
       <option value="bo5" selected>Bo5</option>
       <option value="bo7">Bo7</option>
     </select>
+    <label for="draftMode">Draft mode</label>
+    <select id="draftMode">
+      <option value="global">Global Ban &amp; Pick</option>
+      <option value="normal">Normal Draft</option>
+    </select>
     <span class="game-indicator" id="gameIndicator">Game 1</span>
     <button id="nextGameBtn" class="btn btn-ghost" style="padding:4px 10px;font-size:12px">➕ Add Next Game</button>
+    <button id="draftHistoryBtn" class="btn btn-ghost" style="padding:4px 10px;font-size:12px">📜 Draft History</button>
     <div class="spacer"></div>
     <span class="team-score blue" id="seriesBlueScore">Blue 0</span>
     <span class="team-score red" id="seriesRedScore">Red 0</span>
@@ -196,6 +228,12 @@ button,select,input,textarea{font-family:inherit}
     <span class="phase-value" id="phaseValue">—</span>
     <span class="phase-detail" id="phaseDetail"></span>
     <span id="turnBadge" class="turn-badge blue">Blue Turn</span>
+    <div class="draft-timer" aria-live="off">
+      <span class="draft-timer-label">Turn time</span>
+      <span id="draftTimerValue" class="draft-timer-value">0</span>
+      <span class="draft-timer-label">sec</span>
+      <button id="ignoreTurnTimeBtn" class="btn btn-ghost" type="button">Ignore this turn</button>
+    </div>
   </div>
 
   <div class="draft-layout">
@@ -271,12 +309,18 @@ button,select,input,textarea{font-family:inherit}
       </div>
 
       <div class="sidebar-card">
-        <h3>Global Ban Rules</h3>
+        <h3>Draft Mode Rules</h3>
         <p class="hint">
-          In Global Ban &amp; Pick, a hero picked by a team in any game of the series <b>cannot be picked again by that same team</b> in later games.
+          <b>Global Ban &amp; Pick:</b> a hero picked by a team in an earlier game cannot be picked again by that same team. Previously picked heroes can still be banned by either team.
           <br><br>
-          Bans in the current game still apply normally. Heroes from previous games are shown with a red <b>GLOBAL</b> tag if they are unavailable to the active team.
+          <b>Normal Draft:</b> no cross-game restrictions. Every hero becomes available again in the next game. Bans and picks within the current game always remain exclusive.
         </p>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Draft Timing Averages</h3>
+        <p class="hint" style="margin-top:0">Average time per completed ban or pick. Turns marked as ignored are excluded.</p>
+        <div id="draftTimingStats" class="timing-stats"></div>
       </div>
 
       <div class="sidebar-card">
@@ -289,6 +333,17 @@ button,select,input,textarea{font-family:inherit}
         </p>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="draftHistoryModal" class="modal" hidden>
+  <div class="modal-card" style="max-width:900px">
+    <header>
+      <h2>📜 Series Draft History</h2>
+      <button type="button" class="modal-close" id="draftHistoryClose">✕</button>
+    </header>
+    <p class="hint">Review the bans and picks from every game in this series. Opening history does not change the active draft.</p>
+    <div id="draftHistoryContent" class="draft-history-content"></div>
   </div>
 </div>
 
@@ -478,12 +533,16 @@ function findPair(map, ka, kb) {
    Draft state
    ============================================================ */
 const state = {
-  series: { format: 'bo5', currentGame: 1, games: [] },
+  series: { format: 'bo5', draftMode: 'global', currentGame: 1, games: [] },
   heroSearch: '',
 };
 
+// The active turn timer is intentionally session-local; completed turn timings are saved with each game.
+let turnTimer = { key: null, startedAt: Date.now(), ignored: false };
+let turnTimerInterval = null;
+
 function createEmptyGame() {
-  return { id: uid(), blueBans: [], redBans: [], bluePicks: [], redPicks: [], stepIndex: 0 };
+  return { id: uid(), blueBans: [], redBans: [], bluePicks: [], redPicks: [], stepIndex: 0, timings: [] };
 }
 function ensureGames() {
   if (!state.series.games.length) state.series.games.push(createEmptyGame());
@@ -519,8 +578,11 @@ function isHeroUsedInCurrentGame(heroId) {
   return g.blueBans.includes(heroId) || g.redBans.includes(heroId) ||
          g.bluePicks.includes(heroId) || g.redPicks.includes(heroId);
 }
-function isHeroAvailable(heroId, team) {
-  return !isHeroGloballyBanned(heroId, team) && !isHeroUsedInCurrentGame(heroId);
+function isHeroAvailable(heroId, team, action) {
+  const globalRestrictionApplies =
+    state.series.draftMode === 'global' && action === 'pick';
+  return !(globalRestrictionApplies && isHeroGloballyBanned(heroId, team)) &&
+         !isHeroUsedInCurrentGame(heroId);
 }
 
 /* ============================================================
@@ -533,13 +595,16 @@ function selectHero(heroId) {
   const g = currentGame();
   const team = step.team;
   const action = step.action;
-  if (!isHeroAvailable(heroId, team)) {
-    toast('This hero is not available (global ban or already used).');
+  if (!isHeroAvailable(heroId, team, action)) {
+    toast('This hero is not available (already used in this game or globally unavailable for this pick).');
     return;
   }
   const targetArray = team === 'blue'
     ? (action === 'ban' ? g.blueBans : g.bluePicks)
     : (action === 'ban' ? g.redBans : g.redPicks);
+  const elapsedSeconds = turnTimer.ignored ? null : Math.floor(Math.max(0, Date.now() - turnTimer.startedAt) / 1000);
+  if (!Array.isArray(g.timings)) g.timings = [];
+  g.timings.push({ stepIndex: g.stepIndex, team, action, seconds: elapsedSeconds, ignored: turnTimer.ignored });
   targetArray.push(heroId);
   g.stepIndex++;
   renderAll();
@@ -578,7 +643,10 @@ function loadStored() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
-    if (data && Array.isArray(data.games)) state.series = data;
+    if (data && Array.isArray(data.games)) {
+      state.series = data;
+      if (!state.series.draftMode) state.series.draftMode = 'global';
+    }
   } catch (e) { /* ignore */ }
 }
 
@@ -635,6 +703,7 @@ function renderAll() {
   renderPhaseIndicator();
   renderDraftSlots();
   renderHeroGrid();
+  renderDraftTimingStats();
   updateWinPrediction();
   updateMatchupStatus();
   updateSimilarButton();
@@ -642,24 +711,50 @@ function renderAll() {
 
 function renderSeriesBar() {
   els.seriesFormat.value = state.series.format;
+  document.getElementById('draftMode').value = state.series.draftMode || 'global';
   els.gameIndicator.textContent = `Game ${state.series.currentGame} / ${state.series.games.length}`;
   els.seriesBlueScore.textContent = `Blue ${state.series.games.filter(g => g.bluePicks.length >= 5).length}`;
   els.seriesRedScore.textContent = `Red ${state.series.games.filter(g => g.redPicks.length >= 5).length}`;
 }
 
-function renderPhaseIndicator() {
+function ensureTurnTimer() {
   const step = currentStep();
+  const g = currentGame();
+  const key = step ? `${g.id}:${g.stepIndex}` : `${g.id}:complete`;
+  if (turnTimer.key !== key) turnTimer = { key, startedAt: Date.now(), ignored: false };
+  return step;
+}
+
+function getTurnElapsedSeconds() {
+  return turnTimer.ignored ? 0 : Math.floor(Math.max(0, Date.now() - turnTimer.startedAt) / 1000);
+}
+
+function renderTurnTimer() {
+  const step = ensureTurnTimer();
+  const value = document.getElementById('draftTimerValue');
+  const button = document.getElementById('ignoreTurnTimeBtn');
+  value.textContent = step && !turnTimer.ignored ? String(getTurnElapsedSeconds()) : '—';
+  button.disabled = !step;
+  button.textContent = turnTimer.ignored ? 'Resume timing' : 'Ignore this turn';
+  button.classList.toggle('btn-emerald', turnTimer.ignored);
+  button.classList.toggle('btn-ghost', !turnTimer.ignored);
+}
+
+function renderPhaseIndicator() {
+  const step = ensureTurnTimer();
   if (!step) {
     els.phaseValue.textContent = 'Draft Complete';
     els.phaseDetail.textContent = 'All bans and picks are done for this game.';
     els.turnBadge.textContent = '—';
     els.turnBadge.className = 'turn-badge';
+    renderTurnTimer();
     return;
   }
   els.phaseValue.textContent = step.label;
   els.phaseDetail.textContent = `${step.team.toUpperCase()} ${step.action.toUpperCase()}`;
   els.turnBadge.textContent = step.team === 'blue' ? 'Blue Turn' : 'Red Turn';
   els.turnBadge.className = 'turn-badge ' + step.team;
+  renderTurnTimer();
 }
 
 function renderDraftSlots() {
@@ -721,7 +816,8 @@ function renderHeroGrid() {
   const step = currentStep();
   const activeTeam = step ? step.team : null;
   const q = state.heroSearch.trim().toLowerCase();
-  const globalBanned = activeTeam ? getGlobalBannedHeroes(activeTeam) : new Set();
+  const globalBanned = activeTeam && step.action === 'pick' && state.series.draftMode === 'global'
+    ? getGlobalBannedHeroes(activeTeam) : new Set();
   const filtered = DATA.heroes.filter(h => {
     if (q && !(h.name || '').toLowerCase().includes(q)) return false;
     return true;
@@ -758,6 +854,120 @@ function renderHeroGrid() {
     }
     els.heroGrid.appendChild(card);
   }
+}
+
+function renderDraftTimingStats() {
+  const root = document.getElementById('draftTimingStats');
+  if (!root) return;
+  root.innerHTML = '';
+  for (const team of ['blue', 'red']) {
+    const panel = document.createElement('div');
+    panel.className = `timing-team ${team}`;
+    const heading = document.createElement('strong');
+    heading.textContent = team === 'blue' ? '🔵 Blue Team' : '🔴 Red Team';
+    panel.appendChild(heading);
+    for (const action of ['ban', 'pick']) {
+      const values = state.series.games.flatMap(game => (game.timings || [])
+        .filter(t => t.team === team && t.action === action && !t.ignored && Number.isFinite(t.seconds))
+        .map(t => t.seconds));
+      const average = values.length ? `${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)} s` : '—';
+      const row = document.createElement('div');
+      row.className = 'timing-row';
+      const label = document.createElement('span');
+      label.textContent = action === 'ban' ? 'Ban average' : 'Pick average';
+      const result = document.createElement('b');
+      result.textContent = `${average} (${values.length})`;
+      row.append(label, result);
+      panel.appendChild(row);
+    }
+    root.appendChild(panel);
+  }
+}
+
+/* ============================================================
+   Series draft history
+   ============================================================ */
+function renderHistoryHeroes(container, ids) {
+  if (!ids.length) {
+    const empty = document.createElement('span');
+    empty.className = 'history-empty';
+    empty.textContent = 'None';
+    container.appendChild(empty);
+    return;
+  }
+  ids.forEach(id => {
+    const hero = DATA.heroes.find(h => h.id === id);
+    const item = document.createElement('span');
+    item.className = 'history-hero';
+    item.title = hero ? hero.name : id;
+    if (hero && hero.img) {
+      const img = document.createElement('img');
+      img.src = hero.img;
+      img.alt = '';
+      img.onerror = () => img.remove();
+      item.appendChild(img);
+    }
+    const name = document.createElement('span');
+    name.textContent = hero ? hero.name : id;
+    item.appendChild(name);
+    container.appendChild(item);
+  });
+}
+
+function renderDraftHistory() {
+  const content = document.getElementById('draftHistoryContent');
+  content.innerHTML = '';
+  state.series.games.forEach((game, index) => {
+    const card = document.createElement('section');
+    card.className = 'history-game';
+    const heading = document.createElement('h3');
+    heading.textContent = `Game ${index + 1}`;
+    if (index + 1 === state.series.currentGame) {
+      const current = document.createElement('span');
+      current.className = 'history-current';
+      current.textContent = 'CURRENT GAME';
+      heading.appendChild(current);
+    }
+    card.appendChild(heading);
+
+    const teams = document.createElement('div');
+    teams.className = 'history-teams';
+    for (const team of ['blue', 'red']) {
+      const panel = document.createElement('div');
+      panel.className = `history-team ${team}`;
+      const title = document.createElement('h4');
+      title.textContent = team === 'blue' ? '🔵 Blue Team' : '🔴 Red Team';
+      panel.appendChild(title);
+
+      for (const [label, ids] of [
+        ['Bans', game[`${team}Bans`] || []],
+        ['Picks', game[`${team}Picks`] || []]
+      ]) {
+        const group = document.createElement('div');
+        group.className = 'history-group';
+        const groupTitle = document.createElement('strong');
+        groupTitle.textContent = label;
+        group.appendChild(groupTitle);
+        const heroes = document.createElement('div');
+        heroes.className = 'history-heroes';
+        renderHistoryHeroes(heroes, ids);
+        group.appendChild(heroes);
+        panel.appendChild(group);
+      }
+      teams.appendChild(panel);
+    }
+    card.appendChild(teams);
+    content.appendChild(card);
+  });
+
+  if (!state.series.games.length) {
+    content.textContent = 'No games have been drafted yet.';
+  }
+}
+
+function openDraftHistory() {
+  renderDraftHistory();
+  document.getElementById('draftHistoryModal').hidden = false;
 }
 
 /* ============================================================
@@ -1324,7 +1534,22 @@ els.seriesFormat.addEventListener('change', () => {
   scheduleSave();
 });
 els.nextGameBtn.addEventListener('click', addNextGame);
+document.getElementById('ignoreTurnTimeBtn').addEventListener('click', () => {
+  if (!currentStep()) return;
+  turnTimer.ignored = !turnTimer.ignored;
+  if (!turnTimer.ignored) turnTimer.startedAt = Date.now();
+  renderTurnTimer();
+});
 els.resetSeriesBtn.addEventListener('click', resetSeries);
+document.getElementById('draftMode').addEventListener('change', e => {
+  state.series.draftMode = e.target.value === 'normal' ? 'normal' : 'global';
+  renderAll();
+  scheduleSave();
+});
+document.getElementById('draftHistoryBtn').addEventListener('click', openDraftHistory);
+document.getElementById('draftHistoryClose').addEventListener('click', () => {
+  document.getElementById('draftHistoryModal').hidden = true;
+});
 els.heroSearch.addEventListener('input', () => {
   state.heroSearch = els.heroSearch.value;
   renderHeroGrid();
@@ -1353,6 +1578,7 @@ document.getElementById('loadInput').addEventListener('change', e => {
       const data = JSON.parse(String(reader.result));
       if (data && data.series && Array.isArray(data.series.games)) {
         state.series = data.series;
+        if (!state.series.draftMode) state.series.draftMode = 'global';
         renderAll();
         scheduleSave();
         toast('Draft loaded');
@@ -1368,6 +1594,9 @@ document.getElementById('loadInput').addEventListener('change', e => {
 function init() {
   loadStored();
   renderAll();
+  turnTimerInterval = setInterval(() => {
+    if (currentStep()) renderTurnTimer();
+  }, 200);
   autoLoadMatchups();
   autoLoadMatchHistory();
 }
